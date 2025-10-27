@@ -41,6 +41,10 @@ model User {
 
   MessageBoards MessageBoard[]
 
+  // 行程規劃
+  Expenses     Expense[]
+  PackingLists PackingList[]
+
   // 住宿交通
   Reviews                Review[]
   FavoriteAccommodations FavoriteAccommodation[]
@@ -168,6 +172,75 @@ model MessageBoard {
 // ----------------------------------------------------------------------
 // m2 行程規劃模組
 // ----------------------------------------------------------------------
+//記帳分類(美食、住宿、交通、購物、票券)
+model ExpenseType {
+  id   Int    @id @default(autoincrement()) @map("expense_id")
+  name String @unique
+
+  Expenses Expense[]
+
+  @@map("expense_types")
+}
+
+//記帳內容
+model Expense {
+  id          Int     @id @default(autoincrement()) @map("expense_id")
+  itineraryId Int     @map("itinerary_id") // 對應 UserItinerary.id，型別改為 Int
+  userId      Int     @map("user_id")
+  title       String
+  amount      Float
+  typeId      Int?    @map("type_id") // 可為 null
+  location    String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  User      User         @relation(fields: [userId], references: [id])
+  Itinerary Itinerary?   @relation(fields: [itineraryId], references: [id])
+  Type      ExpenseType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+
+  @@map("expenses")
+}
+
+//行李清單
+model PackingList {
+  id          Int  @id @default(autoincrement()) @map("packing_list_id")
+  userId      Int  @map("user_id")
+  itineraryId Int? @map("itinerary_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  User      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Itinerary Itinerary?    @relation(fields: [itineraryId], references: [id])
+  Items     PackingItem[]
+
+  @@map("packing_lists")
+}
+
+//行李清單分類
+model PackingItemTemplate {
+  id       Int     @id @default(autoincrement()) @map("packing_item_template_id")
+  name     String  @unique
+  category String?
+
+  Items PackingItem[]
+
+  @@map("packing_item_templates")
+}
+
+//行李清單明細
+model PackingItem {
+  id        Int     @id @default(autoincrement()) @map("packing_item_id")
+  listId    Int     @map("list_id")
+  itemId    Int     @map("item_id")
+  isChecked Boolean @default(false) @map("is_checked")
+
+  List     PackingList         @relation(fields: [listId], references: [id], onDelete: Cascade)
+  Template PackingItemTemplate @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@map("packing_items")
+}
+
 // ----------------------------------------------------------------------
 // m3 住宿交通模組
 // ----------------------------------------------------------------------
@@ -656,6 +729,8 @@ model Itinerary {
   Images            ItineraryImage[]
   UserLinked        UserItinerary[]
   ItineraryComments ItineraryComment[]
+  Expense           Expense[]
+  PackingList       PackingList[]
 
   @@map("itineraries")
 }
