@@ -10,6 +10,8 @@ import session from "express-session";
 import sessionFileStore from "session-file-store";
 import cors from "cors";
 
+import loginRouter from "./routes/api-login";
+
 // 建立伺服器主物件
 const app = express();
 
@@ -84,6 +86,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.get("/", (req: Request, res: Response) => {
   res.json("ok");
 });
+
+app.use("/api-login", loginRouter);
 
 const port = +(process.env.PORT || "3002");
 app.listen(port, () => {
