@@ -9,8 +9,10 @@ import cookieParser from "cookie-parser";
 import session from "express-session";
 import sessionFileStore from "session-file-store";
 import cors from "cors";
+import jwt from "jsonwebtoken";
 
 import loginRouter from "./routes/api-login";
+import signupRouter from "./routes/api-sign_up";
 
 // 建立伺服器主物件
 const app = express();
@@ -88,6 +90,7 @@ app.get("/", (req: Request, res: Response) => {
 });
 
 app.use("/api-login", loginRouter);
+app.use("/api-sign_up", signupRouter);
 
 const port = +(process.env.PORT || "3002");
 app.listen(port, () => {
