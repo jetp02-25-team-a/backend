@@ -1,0 +1,16 @@
+[
+  { "name": "飯店 (Hotel)" },
+  { "name": "旅社 (Inn/Basic Hotel)" },
+  { "name": "客棧 (Inn / Guesthouse)" },
+  { "name": "民宿 (B&B)" },
+  { "name": "青年旅館 (Hostel)" },
+  { "name": "度假村 (Resort)" },
+  { "name": "露營地 (Camping)" },
+  { "name": "公寓式酒店 (Apartment Hotel)" },
+  { "name": "小木屋/別墅 (Cabin/Villa)" },
+  { "name": "膠囊旅館 (Capsule Hotel)" },
+  { "name": "汽車旅館 (Motel)" },
+  { "name": "農場/莊園住宿 (Farm Stay)" },
+  { "name": "船屋/遊艇 (Houseboat/Yacht)" },
+  { "name": "奢華帳篷 (Glamping)" }
+]

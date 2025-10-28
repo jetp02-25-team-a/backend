@@ -13,3 +13,904 @@ datasource db {
   provider = "mysql"
   url      = env("DATABASE_URL")
 }
+
+// ----------------------------------------------------------------------
+// 共用表
+// ----------------------------------------------------------------------
+
+model User {
+  id Int @id @default(autoincrement()) @map("user_id")
+
+  email    String  @unique
+  password String?
+
+  nickname String?
+  fullName String? @map("full_name")
+  avatar   String?
+  safety   Int?    @default(0)
+
+  description String?
+  point       Int     @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 旅行筆記
+  Likes Like[]
+  Posts Post[]
+
+  MessageBoards MessageBoard[]
+
+  // 行程規劃
+  Expenses     Expense[]
+  PackingLists PackingList[]
+
+  // 住宿交通
+  Reviews                Review[]
+  FavoriteAccommodations FavoriteAccommodation[]
+  Bookings               Booking[]
+
+  // 美食景點
+  Favorites Favorite[]
+  Comments  Comment[]
+  Ranks     Rank[]
+  Histories History[]
+
+  // 尋找旅伴
+  MessagesSent     Message[] @relation("MessageSender")
+  MessagesReceived Message[] @relation("MessageReceiver")
+
+  FriendshipsUser   Friendship[] @relation("UserFriendships")
+  FriendshipsFriend Friendship[] @relation("FriendFriendships")
+
+  RoomMembers       RoomMember[]
+  Itineraries       Itinerary[]
+  UserItineraries   UserItinerary[]
+  ItineraryComments ItineraryComment[]
+
+  // 商城
+  Orders     Order[]
+  Carts      Cart[]
+  PointsLogs PointsLog[]
+  LoginLogs  LoginLog[]
+
+  @@map("users")
+}
+
+model City {
+  id   Int    @id @default(autoincrement()) @map("city_id")
+  name String @unique
+
+  // m3
+  Accommodations Accommodation[]
+
+  //m4
+  Places Place[]
+
+  @@map("cities")
+}
+
+// ----------------------------------------------------------------------
+// m1 旅行筆記模組
+// ----------------------------------------------------------------------
+
+// 讚表 (Like)
+model Like {
+  // PK
+  id Int @id @default(autoincrement()) @map("like_id")
+
+  userId Int @map("user_id")
+  postId Int @map("post_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([userId, postId])
+  @@index([postId])
+  @@map("likes")
+}
+
+// 文章表 (Post)
+model Post {
+  // PK
+  id Int @id @default(autoincrement()) @map("post_id")
+
+  userId Int @map("user_id")
+
+  location String @map("location") @db.VarChar(255) // 旅遊地點
+  title    String @map("title") @db.VarChar(200) // 標題
+  content  String @map("content") @db.Text // 內容
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  User User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  Likes  Like[]
+  Photos Photo[]
+
+  @@index([userId])
+  @@map("posts")
+}
+
+// 照片表 (Photo)
+model Photo {
+  // PK
+  id Int @id @default(autoincrement()) @map("photo_id")
+
+  postId Int @map("post_id")
+
+  url String @map("url") @db.VarChar(255) // 照片 URL
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  Post Post @relation(fields: [postId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([postId])
+  @@map("photos")
+}
+
+// 留言板表 (MessageBoard)
+model MessageBoard {
+  // PK
+  id Int @id @default(autoincrement()) @map("message_id")
+
+  // 欄位
+  userId   Int?    @map("user_id") // 使用者 ID（可為空）
+  username String? @map("username") @db.VarChar(255) // 使用者名稱
+  content  String? @map("content") @db.VarChar(500) // 留言內容
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  User User? @relation(fields: [userId], references: [id])
+
+  @@map("message_boards")
+}
+
+// ----------------------------------------------------------------------
+// m2 行程規劃模組
+// ----------------------------------------------------------------------
+//記帳分類(美食、住宿、交通、購物、票券)
+model ExpenseType {
+  id   Int    @id @default(autoincrement()) @map("expense_id")
+  name String @unique
+
+  Expenses Expense[]
+
+  @@map("expense_types")
+}
+
+//記帳內容
+model Expense {
+  id          Int     @id @default(autoincrement()) @map("expense_id")
+  itineraryId Int     @map("itinerary_id") // 對應 UserItinerary.id，型別改為 Int
+  userId      Int     @map("user_id")
+  title       String
+  amount      Float
+  typeId      Int?    @map("type_id") // 可為 null
+  location    String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  User      User         @relation(fields: [userId], references: [id])
+  Itinerary Itinerary?   @relation(fields: [itineraryId], references: [id])
+  Type      ExpenseType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+
+  @@map("expenses")
+}
+
+//行李清單
+model PackingList {
+  id          Int  @id @default(autoincrement()) @map("packing_list_id")
+  userId      Int  @map("user_id")
+  itineraryId Int? @map("itinerary_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  User      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Itinerary Itinerary?    @relation(fields: [itineraryId], references: [id])
+  Items     PackingItem[]
+
+  @@map("packing_lists")
+}
+
+//行李清單分類
+model PackingItemTemplate {
+  id       Int     @id @default(autoincrement()) @map("packing_item_template_id")
+  name     String  @unique
+  category String?
+
+  Items PackingItem[]
+
+  @@map("packing_item_templates")
+}
+
+//行李清單明細
+model PackingItem {
+  id        Int     @id @default(autoincrement()) @map("packing_item_id")
+  listId    Int     @map("list_id")
+  itemId    Int     @map("item_id")
+  isChecked Boolean @default(false) @map("is_checked")
+
+  List     PackingList         @relation(fields: [listId], references: [id], onDelete: Cascade)
+  Template PackingItemTemplate @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@map("packing_items")
+}
+
+// ----------------------------------------------------------------------
+// m3 住宿交通模組
+// ----------------------------------------------------------------------
+
+model Accommodation {
+  id Int @id @default(autoincrement()) @map("accommodation_id")
+
+  typeId            Int               @default(1) @map("type_id")
+  accommodationType AccommodationType @relation(fields: [typeId], references: [id])
+
+  cityId Int  @map("city_id")
+  City   City @relation(fields: [cityId], references: [id])
+
+  name        String
+  address     String
+  description String? @db.Text
+
+  latitude     Float?
+  longitude    Float?
+  checkInTime  String? @map("check_in_time")
+  checkOutTime String? @map("check_out_time")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  Contacts  Contact[]
+  RoomTypes RoomType[]
+  Reviews   Review[]
+  Favorites FavoriteAccommodation[]
+  Amenities AccommodationAmenity[]
+  Bookings  Booking[]
+  Images    AccommodationImage[]
+
+  @@index([cityId])
+  @@map("accommodations")
+}
+
+model AccommodationType {
+  id   Int    @id @default(autoincrement()) @map("type_id")
+  name String @unique
+
+  Accommodations Accommodation[]
+
+  @@map("accommodation_types")
+}
+
+model Contact {
+  id Int @id @default(autoincrement()) @map("contact_id")
+
+  accommodationId Int           @map("accommodation_id")
+  Accommodation   Accommodation @relation(fields: [accommodationId], references: [id])
+
+  type        String
+  value       String
+  description String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("contacts")
+}
+
+model RoomType {
+  id Int @id @default(autoincrement()) @map("room_type_id")
+
+  accommodationId Int           @map("accommodation_id")
+  Accommodation   Accommodation @relation(fields: [accommodationId], references: [id])
+
+  name        String
+  description String?
+  basePrice   Float   @map("base_price")
+  maxCapacity Int     @map("max_capacity")
+  totalRooms  Int     @map("total_rooms")
+
+  bedType String? @map("bed_type")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  Amenities    RoomTypeAmenity[]
+  Rates        RoomRate[]
+  Inventories  RoomInventory[]
+  BookingItems BookingItem[]
+
+  @@map("room_types")
+}
+
+model Amenity {
+  id   Int     @id @default(autoincrement()) @map("amenity_id")
+  name String  @unique
+  type String?
+
+  Accommodations AccommodationAmenity[]
+  RoomTypes      RoomTypeAmenity[]
+
+  @@map("amenities")
+}
+
+model AccommodationImage {
+  id Int @id @default(autoincrement()) @map("image_id")
+
+  accommodationId Int           @map("accommodation_id")
+  Accommodation   Accommodation @relation(fields: [accommodationId], references: [id])
+
+  url       String  @map("image_url")
+  caption   String?
+  isPrimary Boolean @default(false)
+  sortOrder Int     @default(1)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("accommodation_images")
+}
+
+model AccommodationAmenity {
+  id Int @id @default(autoincrement())
+
+  accommodationId Int           @map("accommodation_id")
+  Accommodation   Accommodation @relation(fields: [accommodationId], references: [id])
+
+  amenityId Int     @map("amenity_id")
+  Amenity   Amenity @relation(fields: [amenityId], references: [id])
+
+  @@unique([accommodationId, amenityId])
+  @@map("accommodation_amenities")
+}
+
+model RoomTypeAmenity {
+  id Int @id @default(autoincrement())
+
+  roomTypeId Int      @map("room_type_id")
+  RoomType   RoomType @relation(fields: [roomTypeId], references: [id])
+
+  amenityId Int     @map("amenity_id")
+  Amenity   Amenity @relation(fields: [amenityId], references: [id])
+
+  @@unique([roomTypeId, amenityId])
+  @@map("room_type_amenities")
+}
+
+model FavoriteAccommodation {
+  id Int @id @default(autoincrement()) @map("favorite_id")
+
+  userId Int  @map("user_id")
+  User   User @relation(fields: [userId], references: [id])
+
+  accommodationId Int           @map("accommodation_id")
+  Accommodation   Accommodation @relation(fields: [accommodationId], references: [id])
+
+  addedAt DateTime @default(now()) @map("added_at")
+
+  @@unique([userId, accommodationId])
+  @@map("favorite_accommodations")
+}
+
+model RoomRate {
+  id Int @id @default(autoincrement()) @map("rate_id")
+
+  roomTypeId Int      @map("room_type_id")
+  RoomType   RoomType @relation(fields: [roomTypeId], references: [id])
+
+  date       DateTime @map("date")
+  dailyPrice Decimal  @map("daily_price") @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([roomTypeId, date])
+  @@map("room_rates")
+}
+
+model RoomInventory {
+  id Int @id @default(autoincrement()) @map("inventory_id")
+
+  roomTypeId Int      @map("room_type_id")
+  RoomType   RoomType @relation(fields: [roomTypeId], references: [id])
+
+  date           DateTime @map("date")
+  totalCount     Int      @map("total_count")
+  availableCount Int      @map("available_count")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([roomTypeId, date])
+  @@map("room_inventories")
+}
+
+model Booking {
+  id Int @id @default(autoincrement()) @map("booking_id")
+
+  userId Int  @map("user_id")
+  User   User @relation(fields: [userId], references: [id])
+
+  accommodationId Int           @map("accommodation_id")
+  Accommodation   Accommodation @relation(fields: [accommodationId], references: [id])
+
+  checkInDate  DateTime @map("check_in_date")
+  checkOutDate DateTime @map("check_out_date")
+  totalAmount  Decimal  @map("total_amount") @db.Decimal(10, 2)
+  status       String   @default("Pending")
+
+  guestName    String  @map("guest_name")
+  guestContact String? @map("guest_contact")
+
+  bookingDate      DateTime  @default(now()) @map("booking_date")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  cancellationDate DateTime? @map("cancellation_date")
+
+  Items BookingItem[]
+
+  Review Review?
+
+  @@map("bookings")
+}
+
+model BookingItem {
+  id Int @id @default(autoincrement()) @map("item_id")
+
+  bookingId Int     @map("booking_id")
+  Booking   Booking @relation(fields: [bookingId], references: [id])
+
+  roomTypeId Int      @map("room_type_id")
+  RoomType   RoomType @relation(fields: [roomTypeId], references: [id])
+
+  quantity  Int
+  unitPrice Decimal @map("unit_price") @db.Decimal(10, 2)
+
+  @@map("booking_items")
+}
+
+model Review {
+  id Int @id @default(autoincrement()) @map("review_id")
+
+  accommodationId Int           @map("accommodation_id")
+  Accommodation   Accommodation @relation(fields: [accommodationId], references: [id])
+
+  userId Int  @map("user_id")
+  User   User @relation(fields: [userId], references: [id])
+
+  bookingId Int     @unique @map("booking_id")
+  Booking   Booking @relation(fields: [bookingId], references: [id])
+
+  ratingScore Int     @map("rating_score")
+  comment     String? @db.Text
+
+  reviewDate DateTime  @default(now()) @map("review_date")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
+
+  @@map("reviews")
+}
+
+// ----------------------------------------------------------------------
+// m4 美食景點模組
+// ----------------------------------------------------------------------
+
+// 地點表 (Place) - 美食／景點
+model Place {
+  id        Int     @id @default(autoincrement()) @map("place_id")
+  type      String  @map("type") @db.VarChar(20) // "food" 或 "spot"
+  name      String  @map("name") @db.VarChar(100)
+  introduce String? @map("introduce") @db.Text
+  contact   String? @map("contact") @db.VarChar(50)
+  region    String? @map("region") @db.VarChar(100) // 子區域
+  address   String? @map("address") @db.VarChar(150)
+  latitude  Float?  @map("latitude")
+  longitude Float?  @map("longitude")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at") // 使用 @updatedAt
+
+  // FK (cityId, city)
+  cityId Int?  @map("city_id")
+  City   City? @relation(fields: [cityId], references: [id], onDelete: SetNull)
+
+  // 🔹 回指關聯
+  Photos    PlacePhoto[]
+  Favorites Favorite[]
+  Comments  Comment[]
+  Ranks     Rank[]
+  Histories History[]
+
+  // 🔹 索引
+  @@index([type, region])
+  @@map("places")
+}
+
+// 地點照片表 (PlacePhoto)
+model PlacePhoto {
+  id Int @id @default(autoincrement()) @map("photo_id")
+
+  // FK
+  placeId Int @map("place_id")
+
+  // 欄位
+  url       String @map("url") @db.VarChar(255)
+  sortOrder Int    @default(0) @map("sort_order") // 顯示順序
+
+  Place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  // 加速查詢／排序
+  @@index([placeId, sortOrder])
+  @@map("place_photos")
+}
+
+// 收藏表 (Favorite)
+model Favorite {
+  id Int @id @default(autoincrement()) @map("favorite_id")
+
+  // FK
+  userId  Int @map("user_id")
+  placeId Int @map("place_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  User  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  // 同一使用者對同地點只收藏一次
+  @@unique([userId, placeId])
+  @@map("favorites")
+}
+
+// 評論表 (Comment)
+model Comment {
+  id Int @id @default(autoincrement()) @map("comment_id")
+
+  // FK
+  userId  Int @map("user_id")
+  placeId Int @map("place_id")
+
+  // 欄位
+  content   String?  @map("content") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at") // 使用 @updatedAt
+
+  User  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  // 限制一個使用者對同地點一則留言（可移除）
+  @@unique([userId, placeId])
+  @@index([placeId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("comments")
+}
+
+// 評分表 (Rank)
+model Rank {
+  id Int @id @default(autoincrement()) @map("rank_id")
+
+  // FK
+  userId  Int @map("user_id")
+  placeId Int @map("place_id")
+
+  // 欄位
+  score     Int      @map("score") // 1~5 分
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at") // 使用 @updatedAt
+
+  User  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, placeId])
+  @@index([placeId, updatedAt(sort: Desc)])
+  @@map("ranks")
+}
+
+// 瀏覽紀錄表 (History)
+model History {
+  id Int @id @default(autoincrement()) @map("history_id")
+
+  // FK
+  userId  Int @map("user_id")
+  placeId Int @map("place_id")
+
+  // 欄位
+  lastViewedAt DateTime @default(now()) @updatedAt @map("last_viewed_at")
+
+  User  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  // 一人一地點一筆（時間更新）
+  @@unique([userId, placeId])
+  @@index([userId, lastViewedAt(sort: Desc)])
+  @@map("histories")
+}
+
+// ----------------------------------------------------------------------
+// m5 尋找旅伴模組
+// ----------------------------------------------------------------------
+
+// ----------------- Message -----------------
+model Message {
+  id Int @id @default(autoincrement()) @map("message_id")
+
+  roomId     Int? @map("room_id")
+  receiverId Int? @map("receiver_id")
+  senderId   Int  @map("sender_id")
+
+  content     String @db.Text
+  messageType String @map("message_type")
+
+  createdAt DateTime @default(now()) @map("created_at") // 💡 修正：添加 @default(now())
+  updatedAt DateTime @updatedAt @map("updated_at") // 💡 修正：添加 @updatedAt
+
+  Room     Room? @relation(fields: [roomId], references: [id])
+  Sender   User  @relation("MessageSender", fields: [senderId], references: [id])
+  Receiver User? @relation("MessageReceiver", fields: [receiverId], references: [id])
+
+  @@map("messages")
+}
+
+// ----------------- Room -----------------
+model Room {
+  id Int @id @default(autoincrement()) @map("room_id")
+
+  roomName String @map("room_name")
+
+  createdAt DateTime @default(now()) @map("created_at") // 💡 修正：添加 @default(now())
+
+  Messages Message[]
+  Members  RoomMember[]
+
+  @@map("rooms")
+}
+
+// ----------------- RoomMember -----------------
+model RoomMember {
+  id       Int      @id @default(autoincrement()) @map("room_member_id")
+  roomId   Int      @map("room_id")
+  userId   Int      @map("user_id")
+  joinedAt DateTime @default(now()) @map("joined_at") // 💡 修正：添加 @default(now())
+
+  Room Room @relation(fields: [roomId], references: [id])
+  User User @relation(fields: [userId], references: [id])
+
+  @@unique([roomId, userId])
+  @@map("room_members")
+}
+
+// ----------------- Friendship -----------------
+model Friendship {
+  id        Int      @id @default(autoincrement()) @map("friendship_id")
+  userId    Int      @map("user_id")
+  friendId  Int      @map("friend_id")
+  status    Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  User   User @relation("UserFriendships", fields: [userId], references: [id])
+  Friend User @relation("FriendFriendships", fields: [friendId], references: [id])
+
+  @@map("friendships")
+}
+
+// ----------------- UserItinerary -----------------
+model UserItinerary {
+  id     Int @id @default(autoincrement()) @map("user_itinerary_id")
+  userId Int @map("user_id")
+
+  itineraryId Int @map("itinerary_id")
+
+  User      User       @relation(fields: [userId], references: [id])
+  Itinerary Itinerary? @relation(fields: [itineraryId], references: [id])
+
+  @@map("user_itineraries")
+}
+
+// ----------------- Itinerary  -----------------
+model Itinerary {
+  id     Int    @id @default(autoincrement()) @map("itinerary_id")
+  userId Int    @map("user_id")
+  title  String
+
+  createdAt DateTime @default(now()) @map("created_at") // 💡 修正：添加 @default(now())
+  updatedAt DateTime @updatedAt @map("updated_at") // 💡 修正：添加 @updatedAt
+
+  area     String
+  category Int
+  status   Int
+
+  User User @relation(fields: [userId], references: [id])
+
+  Days              ItineraryDay[]
+  Images            ItineraryImage[]
+  UserLinked        UserItinerary[]
+  ItineraryComments ItineraryComment[]
+  Expense           Expense[]
+  PackingList       PackingList[]
+
+  @@map("itineraries")
+}
+
+// ----------------- ItineraryDay  -----------------
+model ItineraryDay {
+  id          Int      @id @default(autoincrement()) @map("itinerary_day_id")
+  itineraryId Int      @map("itinerary_id") // 保留原 map 名稱，修正欄位名
+  dayDate     DateTime @map("day_date")
+  startTime   DateTime @map("start_time")
+  status      Int
+
+  Itinerary Itinerary @relation(fields: [itineraryId], references: [id])
+
+  Nodes     ItineraryNode[]
+  StayNodes StayNode[]
+
+  @@map("itinerary_days")
+}
+
+// ----------------- ItineraryNode  -----------------
+model ItineraryNode {
+  id             Int @id @default(autoincrement()) @map("itinerary_node_id")
+  itineraryDayId Int @map("itinerary_day_id") // 保留原 map 名稱，修正欄位名
+  placeId        Int @map("place_id")
+
+  durationMinutes Int @map("duration_minutes")
+  status          Int
+
+  Day ItineraryDay @relation(fields: [itineraryDayId], references: [id])
+
+  @@map("itinerary_nodes")
+}
+
+// ----------------- ItineraryImage  -----------------
+model ItineraryImage {
+  id          Int    @id @default(autoincrement()) @map("itinerary_image_id")
+  itineraryId Int    @map("itinerary_id")
+  imageName   String @map("image_name")
+
+  Itinerary Itinerary @relation(fields: [itineraryId], references: [id])
+
+  @@map("itinerary_images")
+}
+
+// ----------------- StayNode -----------------
+model StayNode {
+  id              Int @id @default(autoincrement()) @map("stay_node_id")
+  itineraryDayId  Int @map("itinerary_day_id")
+  accommodationId Int @map("accommodation_id")
+  status          Int
+
+  Day ItineraryDay @relation(fields: [itineraryDayId], references: [id])
+
+  @@map("stay_nodes")
+}
+
+// ----------------- ItineraryComment  -----------------
+model ItineraryComment {
+  id          Int    @id @default(autoincrement()) @map("itinerary_comment_id")
+  itineraryId Int    @map("itinerary_id")
+  senderId    Int    @map("sender_id")
+  content     String @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") // 💡 修正：添加 @default(now())
+  updatedAt DateTime @updatedAt @map("updated_at") // 💡 修正：添加 @updatedAt
+
+  Itinerary Itinerary @relation(fields: [itineraryId], references: [id])
+  Sender    User      @relation(fields: [senderId], references: [id])
+
+  @@map("itinerary_comments")
+}
+
+// ----------------------------------------------------------------------
+// m6 商城模組
+// -------------------------------------------------------
+
+//產品主表
+model Product {
+  id          Int    @id @default(autoincrement()) @map("product_id")
+  productName String @map("product_name")
+  keyword     String
+  description String
+
+  ProductVariants ProductVariant[]
+  ProductPics     ProductPic[]
+
+  @@map("products")
+}
+
+//產品細項 標價 庫存
+model ProductVariant {
+  id          Int    @id @default(autoincrement()) @map("variant_id")
+  productId   Int    @map("product_id")
+  variantName String @map("variant_name") @db.VarChar(255)
+  price       Int
+  stock       Int
+
+  Product Product @relation(fields: [productId], references: [id])
+
+  OrderDetails OrderDetail[]
+  Carts        Cart[]
+
+  @@map("product_variants")
+}
+
+//產品圖片
+model ProductPic {
+  picId     Int    @id @default(autoincrement()) @map("pic_id")
+  src       String @db.VarChar(255)
+  productId Int    @map("product_id")
+
+  Product Product @relation(fields: [productId], references: [id])
+
+  @@map("product_pics")
+}
+
+//訂單主表
+model Order {
+  id         Int @id @default(autoincrement()) @map("order_id")
+  userId     Int @map("user_id")
+  orderTotal Int @map("order_total")
+
+  User User @relation(fields: [userId], references: [id])
+
+  OrderDetails OrderDetail[]
+
+  @@map("orders")
+}
+
+//訂單細項
+model OrderDetail {
+  id            Int @id @default(autoincrement()) @map("details_id")
+  orderId       Int @map("order_id")
+  variantId     Int @map("variant_id")
+  productAmount Int @map("product_amount")
+  subTotal      Int @map("sub_total")
+
+  Order          Order          @relation(fields: [orderId], references: [id])
+  ProductVariant ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@map("order_details")
+}
+
+//購物車
+model Cart {
+  id        Int @id @default(autoincrement()) @map("cart_id")
+  userId    Int @map("user_id")
+  variantId Int @map("variant_id")
+  amount    Int @default(1) // 💡 修正：添加預設值
+
+  User           User           @relation(fields: [userId], references: [id])
+  ProductVariant ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@unique([userId, variantId]) // 💡 修正：添加唯一約束 (同一用戶同一規格只一條記錄)
+  @@map("carts")
+}
+
+//積分變化紀錄
+model PointsLog {
+  id     Int @id @default(autoincrement()) @map("points_log_id")
+  type   Int
+  userId Int @map("user_id")
+  amount Int
+
+  createdAt DateTime @default(now()) @map("created_at") // 💡 修正：添加時間戳記
+
+  User User @relation(fields: [userId], references: [id])
+
+  @@map("points_logs")
+}
+
+//登入紀錄
+model LoginLog {
+  id        Int      @id @default(autoincrement()) @map("login_log_id")
+  userId    Int      @map("user_id")
+  loginTime DateTime @default(now()) @map("login_time") // 💡 修正：添加 @default(now())
+  status    Int
+
+  User User @relation(fields: [userId], references: [id])
+
+  @@map("login_logs")
+}
