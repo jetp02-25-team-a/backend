@@ -20,7 +20,7 @@ const JWT_SECRET: string =
   process.env.JWT_SECRET || "your-secret-key-change-in-production";
 const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || "2h";
 
-router.post("/", async (req: Request, res: Response) => {
+router.post("/login", async (req: Request, res: Response) => {
   try {
     // 驗證輸入資料
     const validatedData = loginSchema.parse(req.body);
@@ -95,6 +95,24 @@ router.post("/", async (req: Request, res: Response) => {
     };
     res.status(500).json(errorResponse);
   }
+});
+
+router.post("/signup", async (req: Request, res: Response) => {
+  //拿取資料
+  const { email, password, nickname } = req.body;
+
+  //密碼雜湊
+  const password_hash = await bcrypt.hash(password, 12);
+
+  const result = await prisma.user.create({
+    data: {
+      email: email,
+      password: password_hash,
+      nickname: nickname,
+    },
+  });
+
+  res.status(200).json(result);
 });
 
 export default router;

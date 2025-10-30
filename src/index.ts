@@ -12,7 +12,6 @@ import cors from "cors";
 import jwt from "jsonwebtoken";
 
 import loginRouter from "./routes/api-login";
-import signupRouter from "./routes/api-sign_up";
 
 // 建立伺服器主物件
 const app = express();
@@ -89,8 +88,7 @@ app.get("/", (req: Request, res: Response) => {
   res.json("ok");
 });
 
-app.use("/api-login", loginRouter);
-app.use("/api-sign_up", signupRouter);
+app.use("/api", loginRouter);
 
 const port = +(process.env.PORT || "3002");
 app.listen(port, () => {
