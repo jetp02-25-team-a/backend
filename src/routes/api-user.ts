@@ -56,6 +56,7 @@ router.post("/login", async (req: Request, res: Response) => {
       user_id: user.id,
       email: user.email,
       nickname: user.nickname,
+      avatar: user.avatar,
     };
 
     const token = jwt.sign(payload, JWT_SECRET, {
@@ -65,10 +66,10 @@ router.post("/login", async (req: Request, res: Response) => {
     const response: LoginSuccessResponse = {
       success: true,
       data: {
-        user: {
-          user_id: user.id,
-          email: user.email,
-        },
+        user_id: user.id,
+        email: user.email,
+        nickname: user.nickname || "",
+        avatar: user.avatar || "",
         token,
       },
       message: "登入成功",
