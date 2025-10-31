@@ -11,7 +11,7 @@ import sessionFileStore from "session-file-store";
 import cors from "cors";
 import jwt from "jsonwebtoken";
 
-import loginRouter from "./routes/api-login";
+import loginRouter from "./routes/api-user";
 
 // 建立伺服器主物件
 const app = express();

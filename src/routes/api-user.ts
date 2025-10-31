@@ -115,4 +115,17 @@ router.post("/signup", async (req: Request, res: Response) => {
   res.status(200).json(result);
 });
 
+router.post("/auth", async (req: Request, res: Response) => {
+  const auth = req.get("Authorization");
+  if (auth && auth.indexOf("Bearer") === 0) {
+    const token = auth.slice(7);
+    try {
+      const result = jwt.verify(token, process.env.JWT_SECRET);
+      res.status(200).json(result);
+    } catch (e) {
+      res.status(400).json(e);
+    }
+  }
+});
+
 export default router;
