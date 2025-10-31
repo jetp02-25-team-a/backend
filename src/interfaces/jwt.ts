@@ -6,12 +6,16 @@ export interface JwtPayload {
   user_id: number;
   email: string;
   nickname: string | null;
+  avatar: string | null;
 }
 
 export interface LoginSuccessResponse extends ApiResponse {
   success: true;
   data: {
-    user: Omit<User, "password_hash">;
+    user_id: number;
+    email: string;
+    nickname: string;
+    avatar: string;
     token: string;
   };
 }

@@ -20,7 +20,7 @@ const JWT_SECRET: string =
   process.env.JWT_SECRET || "your-secret-key-change-in-production";
 const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || "2h";
 
-router.post("/", async (req: Request, res: Response) => {
+router.post("/login", async (req: Request, res: Response) => {
   try {
     // 驗證輸入資料
     const validatedData = loginSchema.parse(req.body);
@@ -56,6 +56,7 @@ router.post("/", async (req: Request, res: Response) => {
       user_id: user.id,
       email: user.email,
       nickname: user.nickname,
+      avatar: user.avatar,
     };
 
     const token = jwt.sign(payload, JWT_SECRET, {
@@ -65,10 +66,10 @@ router.post("/", async (req: Request, res: Response) => {
     const response: LoginSuccessResponse = {
       success: true,
       data: {
-        user: {
-          user_id: user.id,
-          email: user.email,
-        },
+        user_id: user.id,
+        email: user.email,
+        nickname: user.nickname || "",
+        avatar: user.avatar || "",
         token,
       },
       message: "登入成功",
@@ -94,6 +95,37 @@ router.post("/", async (req: Request, res: Response) => {
       error: "伺服器內部錯誤，請稍後再試",
     };
     res.status(500).json(errorResponse);
+  }
+});
+
+router.post("/signup", async (req: Request, res: Response) => {
+  //拿取資料
+  const { email, password, nickname } = req.body;
+
+  //密碼雜湊
+  const password_hash = await bcrypt.hash(password, 12);
+
+  const result = await prisma.user.create({
+    data: {
+      email: email,
+      password: password_hash,
+      nickname: nickname,
+    },
+  });
+
+  res.status(200).json(result);
+});
+
+router.post("/auth", async (req: Request, res: Response) => {
+  const auth = req.get("Authorization");
+  if (auth && auth.indexOf("Bearer") === 0) {
+    const token = auth.slice(7);
+    try {
+      const result = jwt.verify(token, process.env.JWT_SECRET);
+      res.status(200).json(result);
+    } catch (e) {
+      res.status(400).json(e);
+    }
   }
 });
 
