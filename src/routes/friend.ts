@@ -114,11 +114,9 @@ router.get("/allmessage", async (req: Request, res: Response) => {
             createdAt: "desc",
           },
         });
-        return { rooData: room.Room, LatestMessage: roomLatestMessage };
+        return { roomData: room.Room, LatestMessage: roomLatestMessage };
       })
     );
-
-    // console.log("allRoomsLatestMessages=>", allRoomsLatestMessages);
 
     const data = { allRoomsLatestMessages, allFriendLatestMessage };
     return res.json({ success: true, data: data });
