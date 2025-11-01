@@ -25,7 +25,6 @@ router.post("/login", async (req: Request, res: Response) => {
     // 驗證輸入資料
     const validatedData = loginSchema.parse(req.body);
     const { email, password } = validatedData;
-
     //尋找登入會員
     const user = await prisma.user.findUnique({
       where: { email },
@@ -117,11 +116,13 @@ router.post("/signup", async (req: Request, res: Response) => {
 });
 
 router.post("/auth", async (req: Request, res: Response) => {
+  const JWT_SECRET =
+    process.env.JWT_SECRET || "your-secret-key-change-in-production";
   const auth = req.get("Authorization");
   if (auth && auth.indexOf("Bearer") === 0) {
     const token = auth.slice(7);
     try {
-      const result = jwt.verify(token, process.env.JWT_SECRET);
+      const result = jwt.verify(token, JWT_SECRET);
       res.status(200).json(result);
     } catch (e) {
       res.status(400).json(e);
