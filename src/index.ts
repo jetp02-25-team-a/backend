@@ -2,6 +2,7 @@
 import express from "express";
 // *** verbatimModuleSyntax 為 true 時，標示匯入類型
 import type { Request, Response, NextFunction } from "express";
+
 // 截入環境變數設定檔
 import "dotenv/config";
 

@@ -11,8 +11,8 @@
     "rootDir": "./src", // 源始碼目錄
     "verbatimModuleSyntax": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "preserveSymlinks": true
+    "emitDecoratorMetadata": true
+    // "preserveSymlinks": true
   },
   "include": ["src/**/*"]
 }
