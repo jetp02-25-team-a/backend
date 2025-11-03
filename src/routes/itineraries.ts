@@ -43,13 +43,6 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
     await Promise.all(
       Array.from({ length: totalDays }).map((_, i) => {
         const dayDate = start.clone().add(i, "days").startOf("day"); //moment 轉 datetime 本地 UTC
-
-        // console.log("dayDate=>", dayDate.toDate());
-        // const taipeiTime = moment(dayDate.toDate())
-        //   .tz("Asia/Taipei")
-        //   .format("YYYY-MM-DD HH:mm");
-        // console.log("????=>", taipeiTime);
-
         const dayStartTime = moment(
           `${dayDate.format("YYYY-MM-DD")} ${startTime}`,
           "YYYY-MM-DD HH:mm"
@@ -67,11 +60,38 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
     );
 
     //3.回傳訊息
-    res.status(200).json({ success: true, message: "行程建立完成" });
+    res.status(200).json({
+      success: true,
+      message: "行程建立完成",
+      itineraryId: itinerary.id,
+    });
   } catch (err) {
     console.log(err);
   }
-  //   res.status(200).json({ a: "oooooo" });
+});
+
+//取得該行程的天數和天數下的所有nodes id:22
+router.get("/detail", async (req: Request, res: Response) => {
+  const { itineraryId } = req.query;
+  console.log("itineraryId====>", itineraryId);
+  if (!itineraryId) return;
+  try {
+    const result = await prisma.itineraryDay.findMany({
+      where: {
+        itineraryId: +itineraryId,
+      },
+      include: {
+        Nodes: true,
+        StayNodes: true,
+      },
+      orderBy: {
+        dayDate: "asc",
+      },
+    });
+    res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    console.log(err);
+  }
 });
 
 //搜尋關鍵字附近的景點
