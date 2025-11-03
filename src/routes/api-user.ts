@@ -1,4 +1,4 @@
-import express from "express";
+import express, { request } from "express";
 import type { Request, Response } from "express";
 import { prisma } from "../utils/prisma-pagination.js";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import type {
   LoginSuccessResponse,
 } from "../interfaces/index.js";
 import { loginSchema } from "../schemas/index.js";
+import { jwtParseMiddleware, requireAuth } from "../middleware/jwt.js";
 
 const router = express.Router();
 
@@ -141,6 +142,37 @@ router.get("/user/:id", async (req: Request, res: Response) => {
   };
   res.json(response);
 });
+
+//編輯資料
+router.post(
+  "/user/:id",
+  jwtParseMiddleware,
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const { nickname, description } = req.body;
+    const user_id = parseInt(req.params.id);
+    if (isNaN(user_id)) return res.status(400).send("ID格式錯誤");
+    const data = await prisma.user.findUnique({
+      where: {
+        id: user_id,
+      },
+    });
+
+    const response = {
+      success: true,
+      data: {
+        user_id: data?.id,
+        email: data?.email,
+        nickname: data?.nickname || "",
+        avatar: data?.avatar || "",
+        description: data?.description || "",
+        fullname: data?.fullName || "",
+      },
+      message: "成功",
+    };
+    res.json(response);
+  }
+);
 
 //JWT驗證
 router.post("/auth", async (req: Request, res: Response) => {
