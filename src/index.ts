@@ -20,6 +20,7 @@ import featuredRouter from "./routes/place-features";
 import searchRouter from "./routes/place-search";
 import articleRouter from "./routes/article.routes";
 import mallRouter from "./routes/api-mall";
+import itinerariesRouter from "./routes/itineraries";
 
 import { m3AccommodationsRoute, m3Favorite } from "./routes/m3";
 
@@ -110,6 +111,7 @@ app.use("/api/place/featured", featuredRouter);
 app.use("/api/place/search", searchRouter);
 app.use("/api/place", placeRouter);
 app.use("/api/article", articleRouter);
+app.use("/api/itineraries", itinerariesRouter);
 
 //m3 routes
 app.use("/api/m3", m3AccommodationsRoute);
