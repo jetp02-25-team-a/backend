@@ -20,6 +20,7 @@ const JWT_SECRET: string =
   process.env.JWT_SECRET || "your-secret-key-change-in-production";
 const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || "2h";
 
+//登入
 router.post("/login", async (req: Request, res: Response) => {
   try {
     // 驗證輸入資料
@@ -97,6 +98,7 @@ router.post("/login", async (req: Request, res: Response) => {
   }
 });
 
+//註冊
 router.post("/signup", async (req: Request, res: Response) => {
   //拿取資料
   const { email, password, nickname } = req.body;
@@ -115,6 +117,32 @@ router.post("/signup", async (req: Request, res: Response) => {
   res.status(200).json(result);
 });
 
+//編輯資料-拿該使用者資料
+router.get("/user/:id", async (req: Request, res: Response) => {
+  const user_id = parseInt(req.params.id);
+  if (isNaN(user_id)) return res.status(400).send("ID格式錯誤");
+  const data = await prisma.user.findUnique({
+    where: {
+      id: user_id,
+    },
+  });
+
+  const response = {
+    success: true,
+    data: {
+      user_id: data?.id,
+      email: data?.email,
+      nickname: data?.nickname || "",
+      avatar: data?.avatar || "",
+      description: data?.description || "",
+      fullname: data?.fullName || "",
+    },
+    message: "成功",
+  };
+  res.json(response);
+});
+
+//JWT驗證
 router.post("/auth", async (req: Request, res: Response) => {
   const JWT_SECRET =
     process.env.JWT_SECRET || "your-secret-key-change-in-production";
@@ -125,7 +153,7 @@ router.post("/auth", async (req: Request, res: Response) => {
       const result = jwt.verify(token, JWT_SECRET);
       res.status(200).json(result);
     } catch (e) {
-      res.status(400).json(e);
+      res.status(401).json(e);
     }
   }
 });
