@@ -3,7 +3,7 @@ import type { Request, Response } from "express";
 import { json, success } from "zod";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { prisma } from "../utils/prisma-pagination";
-import moment from "moment";
+import moment from "moment-timezone";
 //<= 路徑
 const router = express.Router();
 
@@ -23,8 +23,6 @@ function decodeToken(req: Request) {
 router.post("/create-itinerary", async (req: Request, res: Response) => {
   const payload = decodeToken(req); //user_id ,
   const { title, area, startDay, endDay, startTime, figure } = req.body;
-  console.log(payload);
-  console.log(req.body);
 
   try {
     if (!payload) return;
@@ -34,22 +32,34 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
         userId: payload.user_id,
         title: title,
         area: area,
-        category: 1,
-        status: 1,
+        figure: figure,
       },
     });
     //2.建立每日行程
-    const start = moment(startDay);
-    const end = moment(endDay);
+    const start = moment.tz(startDay, "Asia/Taipei"); //2025-11-10",轉亞洲本地端
+    const end = moment.tz(endDay, "Asia/Taipei");
     const totalDays = end.diff(start, "days"); //取得行程天數
 
-    const days = Promise.all(
-      Array.from({ length: totalDays }).map((v, i) => {
-        prisma.itineraryDay.create({
+    await Promise.all(
+      Array.from({ length: totalDays }).map((_, i) => {
+        const dayDate = start.clone().add(i, "days").startOf("day"); //moment 轉 datetime 本地 UTC
+
+        // console.log("dayDate=>", dayDate.toDate());
+        // const taipeiTime = moment(dayDate.toDate())
+        //   .tz("Asia/Taipei")
+        //   .format("YYYY-MM-DD HH:mm");
+        // console.log("????=>", taipeiTime);
+
+        const dayStartTime = moment(
+          `${dayDate.format("YYYY-MM-DD")} ${startTime}`,
+          "YYYY-MM-DD HH:mm"
+        ).toDate();
+
+        return prisma.itineraryDay.create({
           data: {
             itineraryId: itinerary.id,
-            dayDate: start.add(i + 1, "days").toDate(), //moment 轉 datetime
-            startTime: startTime,
+            dayDate: dayDate.toDate(),
+            startTime: dayStartTime,
             status: 1,
           },
         });
@@ -61,7 +71,30 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
   } catch (err) {
     console.log(err);
   }
-  res.status(200).json({ a: "oooooo" });
+  //   res.status(200).json({ a: "oooooo" });
+});
+
+//搜尋關鍵字附近的景點
+router.get("/serch", async (req: Request, res: Response) => {
+  const { place } = req.query;
+  const query = typeof place === "string" ? place : "台北101";
+
+  const apiKey = process.env.GOOGLE_API_KEY;
+  //encodeURIComponent() 是用來把「文字」轉成「網址中可以安全使用的格式」。
+  const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
+    query
+  )}&key=${apiKey}`;
+  try {
+    const result = await fetch(url).then((r) => r.json());
+    res.status(200).json(result);
+  } catch (err) {
+    console.log(err);
+  }
+});
+
+//新增某天的新節點
+router.post("create-node", async (req: Request, res: Response) => {
+  const { day, place } = req.body;
 });
 
 //取得所有行程(依照地區)
