@@ -75,7 +75,7 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
 });
 
 //搜尋關鍵字附近的景點
-router.get("/serch", async (req: Request, res: Response) => {
+router.get("/search", async (req: Request, res: Response) => {
   const { place } = req.query;
   const query = typeof place === "string" ? place : "台北101";
 
@@ -85,27 +85,36 @@ router.get("/serch", async (req: Request, res: Response) => {
     query
   )}&key=${apiKey}`;
   try {
+    // 1. 用關鍵字搜尋到的資料
     const result = await fetch(url).then((r) => r.json());
     console.log("result=>", result);
+    // 2. 將所查到的資料存到資料庫
     if (result.status === "OK" && result.results.length > 0) {
       const createPlace = await Promise.all(
         result.results.map(async (place: any) => {
           const { name, place_id, formatted_address, geometry, photos } = place;
-          const data = await prisma.googleMapPlace.create({
+
+          const exist = await prisma.googleMapPlace.findUnique({
+            where: { placeId: place.place_id },
+          });
+          if (exist) return exist;
+
+          return await prisma.googleMapPlace.create({
             data: {
-              placeId: place_id,
-              name: name,
-              formattedAddress: formatted_address,
-              lat: geometry.location.lat,
-              lng: geometry.location.lng,
-              photoReference: photos.photoReference,
+              placeId: place.place_id,
+              name: place.name,
+              formattedAddress: place.formatted_address,
+              lat: place.geometry.location.lat,
+              lng: place.geometry.location.lng,
+              photoReference: place.photos?.[0]?.photo_reference ?? null,
             },
           });
-          return data;
         })
       );
-      console.log("新增地點成功", createPlace);
-      res.status(200).json({ a: "成功" });
+      // 3. 在將存入資料庫的返回給 前端使用者顯示
+
+      // console.log(createPlace);
+      res.status(200).json({ success: true, data: createPlace });
     }
   } catch (err) {
     console.log(err);
