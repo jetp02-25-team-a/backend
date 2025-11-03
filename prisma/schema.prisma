@@ -42,8 +42,10 @@ model User {
   MessageBoards MessageBoard[]
 
   // 行程規劃
-  Expenses     Expense[]
-  PackingLists PackingList[]
+  Expenses        Expense[]
+  PackingItems    PackingItem[]
+  TripPlans       TripPlan[]
+  TripPlanDetails TripPlanDetail[]
 
   // 住宿交通
   Reviews                Review[]
@@ -119,9 +121,9 @@ model Post {
 
   userId Int @map("user_id")
 
-  location String @map("location") @db.VarChar(255) // 旅遊地點
-  title    String @map("title") @db.VarChar(200) // 標題
-  content  String @map("content") @db.Text // 內容
+  location String @db.VarChar(255) // 旅遊地點
+  title    String @db.VarChar(200) // 標題
+  content  String @db.Text // 內容
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -142,7 +144,7 @@ model Photo {
 
   postId Int @map("post_id")
 
-  url String @map("url") @db.VarChar(255) // 照片 URL
+  url String @db.VarChar(255) // 照片 URL
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -159,8 +161,8 @@ model MessageBoard {
 
   // 欄位
   userId   Int?    @map("user_id") // 使用者 ID（可為空）
-  username String? @map("username") @db.VarChar(255) // 使用者名稱
-  content  String? @map("content") @db.VarChar(500) // 留言內容
+  username String? @db.VarChar(255) // 使用者名稱
+  content  String? @db.VarChar(500) // 留言內容
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -172,9 +174,80 @@ model MessageBoard {
 // ----------------------------------------------------------------------
 // m2 行程規劃模組
 // ----------------------------------------------------------------------
+// ----------------- TripPlan  -----------------
+model TripPlan {
+  id        Int      @id @default(autoincrement()) @map("trip_plan_id")
+  userId    Int      @map("user_id")
+  title     String
+  area      String
+  startDate DateTime @map("start_date")
+  endDate   DateTime @map("end_date")
+  url       String   @map("image_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tripPlanListId Int?          @map("trip_plan_list_id")
+  TripPlanList   TripPlanList? @relation(fields: [tripPlanListId], references: [id])
+
+  User           User             @relation(fields: [userId], references: [id])
+  Expense        Expense[]
+  TripPlanDetail TripPlanDetail[]
+
+  PackingItem PackingItem[]
+
+  @@map("trip_plans")
+}
+
+// ----------------- TripPlanList  -----------------
+
+model TripPlanList {
+  id        Int        @id @default(autoincrement()) @map("trip_plan_list_id")
+  userId    Int        @map("user_id")
+  avatar    String?
+  TripPlans TripPlan[]
+
+  @@map("trip_plan_lists")
+}
+
+// ----------------- TripPlanDetail  -----------------
+model TripPlanDetail {
+  id         Int      @id @default(autoincrement()) @map("trip_plan_detail_id")
+  TripPlanId Int      @map("trip_plan_id")
+  userId     Int      @map("user_id")
+  title      String
+  order      Int
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  address    String
+  stayTime   String   @map("stay_time")
+  startDate  DateTime @map("start_date")
+  endDate    DateTime @map("end_date")
+  url        String   @map("image_url")
+
+  tripPlanDetailListId Int?                @map("trip_plan_list_id")
+  TripPlanDetailList   TripPlanDetailList? @relation(fields: [tripPlanDetailListId], references: [id])
+
+  User     User      @relation(fields: [userId], references: [id])
+  TripPlan TripPlan? @relation(fields: [TripPlanId], references: [id])
+
+  @@map("trip_plan_details")
+}
+
+// ----------------- TripPlanDetailList  -----------------
+model TripPlanDetailList {
+  id         Int     @id @default(autoincrement()) @map("trip_plan_detail_list_id")
+  TripPlanId Int     @map("trip_plan_id")
+  userId     Int     @map("user_id")
+  avatar     String?
+
+  TripPlanDetails TripPlanDetail[] // 多筆詳細行程
+
+  @@map("trip_plan_detail_lists")
+}
+
 //記帳分類(美食、住宿、交通、購物、票券)
 model ExpenseType {
-  id   Int    @id @default(autoincrement()) @map("expense_id")
+  id   Int    @id @default(autoincrement()) @map("expense_type_id")
   name String @unique
 
   Expenses Expense[]
@@ -184,59 +257,43 @@ model ExpenseType {
 
 //記帳內容
 model Expense {
-  id          Int     @id @default(autoincrement()) @map("expense_id")
-  itineraryId Int     @map("itinerary_id") // 對應 UserItinerary.id，型別改為 Int
-  userId      Int     @map("user_id")
+  id          Int      @id @default(autoincrement()) @map("expense_id")
+  TripPlanId  Int      @map("trip_plan_id") // 對應 UserTripPlan.id，型別改為 Int
+  userId      Int      @map("user_id")
   title       String
-  amount      Float
-  typeId      Int?    @map("type_id") // 可為 null
-  location    String?
+  amount      Float //Double
+  typeId      Int?     @map("type_id") // 可為 null
+  area        String?
+  expenseDate DateTime @default(now()) @map("expense_date")
+  createdAt   DateTime @default(now()) @map("created_at")
+  isChecked   Boolean  @default(false) @map("is_checked") //for刪除給API使用 
 
-  createdAt DateTime @default(now()) @map("created_at")
-
-  User      User         @relation(fields: [userId], references: [id])
-  Itinerary Itinerary?   @relation(fields: [itineraryId], references: [id])
-  Type      ExpenseType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  User     User         @relation(fields: [userId], references: [id])
+  TripPlan TripPlan?    @relation(fields: [TripPlanId], references: [id])
+  Type     ExpenseType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
 
   @@map("expenses")
 }
 
-//行李清單
-model PackingList {
-  id          Int  @id @default(autoincrement()) @map("packing_list_id")
-  userId      Int  @map("user_id")
-  itineraryId Int? @map("itinerary_id")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  User      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  Itinerary Itinerary?    @relation(fields: [itineraryId], references: [id])
-  Items     PackingItem[]
-
-  @@map("packing_lists")
-}
-
 //行李清單分類
 model PackingItemTemplate {
-  id       Int     @id @default(autoincrement()) @map("packing_item_template_id")
-  name     String  @unique
-  category String?
-
-  Items PackingItem[]
-
-  @@map("packing_item_templates")
+  id           Int           @id @default(autoincrement()) @map("packing_item_template_id")
+  name         String        @unique
+  PackingItems PackingItem[]
 }
 
 //行李清單明細
 model PackingItem {
-  id        Int     @id @default(autoincrement()) @map("packing_item_id")
-  listId    Int     @map("list_id")
-  itemId    Int     @map("item_id")
-  isChecked Boolean @default(false) @map("is_checked")
+  id         Int     @id @default(autoincrement()) @map("packing_item_id")
+  TripPlanId Int     @map("trip_plan_id")
+  userId     Int     @map("user_id")
+  templateId Int?    @map("template_id") // 對應模板 ID 
+  name       String
+  isChecked  Boolean @default(false) @map("is_checked")
 
-  List     PackingList         @relation(fields: [listId], references: [id], onDelete: Cascade)
-  Template PackingItemTemplate @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  User                User                 @relation(fields: [userId], references: [id])
+  TripPlan            TripPlan?            @relation(fields: [TripPlanId], references: [id])
+  PackingItemTemplate PackingItemTemplate? @relation(fields: [templateId], references: [id])
 
   @@map("packing_items")
 }
@@ -347,8 +404,8 @@ model AccommodationImage {
 
   url       String  @map("image_url")
   caption   String?
-  isPrimary Boolean @default(false)
-  sortOrder Int     @default(1)
+  isPrimary Boolean @default(false) @map("is_primary")
+  sortOrder Int     @default(1) @map("sort_order")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -404,7 +461,7 @@ model RoomRate {
   RoomType   RoomType @relation(fields: [roomTypeId], references: [id])
 
   date       DateTime @map("date")
-  dailyPrice Decimal  @map("daily_price") @db.Decimal(10, 2)
+  dailyPrice Float    @map("daily_price")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -638,9 +695,10 @@ model History {
 model Message {
   id Int @id @default(autoincrement()) @map("message_id")
 
-  roomId     Int? @map("room_id")
-  receiverId Int? @map("receiver_id")
-  senderId   Int  @map("sender_id")
+  roomId     Int?    @map("room_id")
+  receiverId Int?    @map("receiver_id")
+  senderId   Int     @map("sender_id")
+  isRead     Boolean @default(false) @map("is_read")
 
   content     String @db.Text
   messageType String @map("message_type")
@@ -719,9 +777,9 @@ model Itinerary {
   createdAt DateTime @default(now()) @map("created_at") // 💡 修正：添加 @default(now())
   updatedAt DateTime @updatedAt @map("updated_at") // 💡 修正：添加 @updatedAt
 
-  area     String
-  category Int
-  status   Int
+  area   String
+  status Int    @default(1)
+  figure Int
 
   User User @relation(fields: [userId], references: [id])
 
@@ -729,8 +787,6 @@ model Itinerary {
   Images            ItineraryImage[]
   UserLinked        UserItinerary[]
   ItineraryComments ItineraryComment[]
-  Expense           Expense[]
-  PackingList       PackingList[]
 
   @@map("itineraries")
 }
