@@ -638,9 +638,10 @@ model History {
 model Message {
   id Int @id @default(autoincrement()) @map("message_id")
 
-  roomId     Int? @map("room_id")
-  receiverId Int? @map("receiver_id")
-  senderId   Int  @map("sender_id")
+  roomId     Int?    @map("room_id")
+  receiverId Int?    @map("receiver_id")
+  senderId   Int     @map("sender_id")
+  isRead     Boolean @default(false) @map("is_read")
 
   content     String @db.Text
   messageType String @map("message_type")
