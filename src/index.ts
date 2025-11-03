@@ -97,7 +97,7 @@ app.get("/", (req: Request, res: Response) => {
 
 app.use("/api", loginRouter);
 app.use("/api/friendships", friendsRouter);
-app.use("/api/friendships", chatRouter);
+app.use("/api/chat", chatRouter);
 
 // ---------- 建立 HTTP + Socket.IO 伺服器 ----------
 const server = http.createServer(app);

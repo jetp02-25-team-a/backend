@@ -38,6 +38,7 @@ router.get("/", async (req: Request, res: Response) => {
       },
       select: {
         friendId: true,
+        createdAt: true,
       },
     });
     return res.status(200).json({ success: true, data: data });
