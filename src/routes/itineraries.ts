@@ -86,7 +86,27 @@ router.get("/serch", async (req: Request, res: Response) => {
   )}&key=${apiKey}`;
   try {
     const result = await fetch(url).then((r) => r.json());
-    res.status(200).json(result);
+    console.log("result=>", result);
+    if (result.status === "OK" && result.results.length > 0) {
+      const createPlace = await Promise.all(
+        result.results.map(async (place: any) => {
+          const { name, place_id, formatted_address, geometry, photos } = place;
+          const data = await prisma.googleMapPlace.create({
+            data: {
+              placeId: place_id,
+              name: name,
+              formattedAddress: formatted_address,
+              lat: geometry.location.lat,
+              lng: geometry.location.lng,
+              photoReference: photos.photoReference,
+            },
+          });
+          return data;
+        })
+      );
+      console.log("新增地點成功", createPlace);
+      res.status(200).json({ a: "成功" });
+    }
   } catch (err) {
     console.log(err);
   }
