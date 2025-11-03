@@ -809,14 +809,16 @@ model ItineraryDay {
 
 // ----------------- ItineraryNode  -----------------
 model ItineraryNode {
-  id             Int @id @default(autoincrement()) @map("itinerary_node_id")
-  itineraryDayId Int @map("itinerary_day_id") // 保留原 map 名稱，修正欄位名
-  placeId        Int @map("place_id")
+  id               Int @id @default(autoincrement()) @map("itinerary_node_id")
+  itineraryDayId   Int @map("itinerary_day_id") // 保留原 map 名稱，修正欄位名
+  placeId          Int @map("place_id")
+  googleMapPlaceId Int @map("google_map_place_id")
 
   durationMinutes Int @map("duration_minutes")
   status          Int
 
-  Day ItineraryDay @relation(fields: [itineraryDayId], references: [id])
+  Day            ItineraryDay   @relation(fields: [itineraryDayId], references: [id])
+  GoogleMapPlace GoogleMapPlace @relation(fields: [googleMapPlaceId], references: [id])
 
   @@map("itinerary_nodes")
 }
@@ -858,6 +860,20 @@ model ItineraryComment {
   Sender    User      @relation(fields: [senderId], references: [id])
 
   @@map("itinerary_comments")
+}
+
+/////////////--------------------
+model GoogleMapPlace {
+  id               Int      @id @default(autoincrement()) @map("google_map_place_id")
+  placeId          String   @unique @map("place_id") // Google 提供的 place_id
+  name             String
+  formattedAddress String   @map("formatted_address")
+  lat              Float
+  lng              Float
+  photoReference   String?  @map("photo_reference") // 可選，若有照片
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  ItineraryNodes ItineraryNode[]
 }
 
 // ----------------------------------------------------------------------
