@@ -12,6 +12,12 @@ import cors from "cors";
 import jwt from "jsonwebtoken";
 
 import loginRouter from "./routes/api-user";
+import friendsRouter from "./routes/friend";
+import chatRouter from "./routes/chat";
+
+import http from "http";
+import { Server } from "socket.io";
+import { chatSocket } from "./socket/socket";
 
 // 建立伺服器主物件
 const app = express();
@@ -21,6 +27,7 @@ const allowedOrigins = [
   "http://localhost:3033", // React 開發伺服器
   "http://localhost:3001", // 另一個前端開發埠
   "http://127.0.0.1:3000",
+  "http://localhost:3000",
   // 生產環境域名
   process.env.FRONTEND_URL || "https://your-production-domain.com",
 ];
@@ -89,8 +96,21 @@ app.get("/", (req: Request, res: Response) => {
 });
 
 app.use("/api", loginRouter);
+app.use("/api/friendships", friendsRouter);
+app.use("/api/chat", chatRouter);
+
+// ---------- 建立 HTTP + Socket.IO 伺服器 ----------
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
+});
+
+chatSocket(io);
 
 const port = +(process.env.PORT || "3002");
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Express + Prisma 啟動 http://localhost:${port}`);
 });
