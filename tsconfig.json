@@ -1,17 +1,18 @@
 {
   "compilerOptions": {
-    "target": "ES2020",           // 目標 JavaScript 版本
-    "module": "ESNext",           // 模組系統
-    "moduleResolution": "node",   // 模組解析方式
-    "ignoreDeprecations": "6.0",  // 忽略特定版本的棄用警告 (上列)
-    "strict": true,               // 啟用嚴格型別檢查
-    "esModuleInterop": true,      // 支援 CommonJS 模組
-    "skipLibCheck": true,         // 忽略類型定義檔檢查
-    "outDir": "./dist",           // 編譯後的輸出目錄
-    "rootDir": "./src",           // 源始碼目錄
+    "target": "ES2020", // 目標 JavaScript 版本
+    "module": "ESNext", // 模組系統
+    "moduleResolution": "node", // 模組解析方式
+    "ignoreDeprecations": "6.0", // 忽略特定版本的棄用警告 (上列)
+    "strict": true, // 啟用嚴格型別檢查
+    "esModuleInterop": true, // 支援 CommonJS 模組
+    "skipLibCheck": true, // 忽略類型定義檔檢查
+    "outDir": "./dist", // 編譯後的輸出目錄
+    "rootDir": "./src", // 源始碼目錄
     "verbatimModuleSyntax": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "preserveSymlinks": true
   },
   "include": ["src/**/*"]
 }

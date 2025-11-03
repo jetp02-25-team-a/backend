@@ -5,9 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon --exec tsx src/index.ts",
-    "seed": "npx prisma db seed"
-  },
-  "prisma": {
+    "pmd": "npx prisma migrate dev",
+    "pmr": "npx prisma migrate reset",
     "seed": "tsx prisma/seed.ts"
   },
   "keywords": [],
@@ -35,7 +34,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/cookie-parser": "^1.4.9",
     "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.3",
+    "@types/express": " 4.17.21",
     "@types/express-session": "^1.18.2",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/multer": "^2.0.0",
