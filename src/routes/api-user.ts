@@ -1,7 +1,7 @@
 import express, { request } from "express";
 import type { Request, Response } from "express";
 import { prisma } from "../utils/prisma-pagination.js";
-import { z } from "zod";
+import { success, z } from "zod";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type {
@@ -144,32 +144,36 @@ router.get("/user/:id", async (req: Request, res: Response) => {
 });
 
 //編輯資料
-router.post(
+router.put(
   "/user/:id",
   jwtParseMiddleware,
   requireAuth,
-  async (req: Request, res: Response) => {
-    const { nickname, description } = req.body;
+  async (req: Request, res: Response<ApiResponse>) => {
+    const { nickname, description, fullName } = req.body;
     const user_id = parseInt(req.params.id);
-    if (isNaN(user_id)) return res.status(400).send("ID格式錯誤");
-    const data = await prisma.user.findUnique({
-      where: {
-        id: user_id,
+    if (isNaN(user_id)) {
+      const response = {
+        success: false,
+        message: "使用者ID錯誤",
+      };
+      return res.status(400).json(response);
+    }
+
+    const r = await prisma.user.update({
+      where: { id: user_id },
+      data: {
+        nickname: nickname || null,
+        description: description || null,
+        fullName: fullName || null,
       },
     });
 
     const response = {
       success: true,
-      data: {
-        user_id: data?.id,
-        email: data?.email,
-        nickname: data?.nickname || "",
-        avatar: data?.avatar || "",
-        description: data?.description || "",
-        fullname: data?.fullName || "",
-      },
-      message: "成功",
+      data: r,
+      message: "更改成功",
     };
+
     res.json(response);
   }
 );

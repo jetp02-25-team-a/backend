@@ -23,7 +23,6 @@ import articleRouter from "./routes/article.routes";
 import http from "http";
 import { Server } from "socket.io";
 import { chatSocket } from "./socket/socket";
-import mallRouter from "./routes/api-mall";
 
 // 建立伺服器主物件
 const app = express();
