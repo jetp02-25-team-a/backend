@@ -5,7 +5,8 @@ import {
   searchPlacesExpanded,
   // createReview,
 } from "../services/placeSelect";
-import commentsRouter from "./comment";
+import commentsRouter from "./place-comment";
+import rankRouter from "./place-ranks";
 import { computeRatingInfo } from "../utils/rating";
 
 const router = Router();
@@ -24,10 +25,13 @@ router.get("/", async (req, res) => {
   });
 
   const parsed = Query.safeParse(req.query);
+
   if (!parsed.success) {
-    return res
-      .status(400)
-      .json({ success: false, error: parsed.error.flatten() });
+    const errors = parsed.error.issues.map((e) => ({
+      path: e.path.join("."),
+      message: e.message,
+    }));
+    return res.status(400).json({ success: false, error: errors });
   }
   const { type, q, limit, offset, photos } = parsed.data;
 
@@ -101,6 +105,7 @@ const ReviewSchema = z.object({
 //   res.status(201).json({ success: true, data: created });
 // });
 // 🟢 把 comments 子路由掛進來（仍是 /places/:id/comments）
-router.use("/:id/comments", commentsRouter);
+router.use("/:id/place-comments", commentsRouter);
+router.use("/:id/place-ranks", rankRouter);
 
 export default router;
