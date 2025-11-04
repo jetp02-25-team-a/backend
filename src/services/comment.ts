@@ -3,17 +3,13 @@ import prisma from "../utils/prisma-pagination-place";
 export async function createComment(
   placeId: number,
   userId: number,
-  data: {
-    content: string;
-    createdAt: Date;
-  }
+  content: string
 ) {
   return prisma.comment.create({
     data: {
       placeId,
       userId,
-      content: data.content,
-      createdAt: data.createdAt,
+      content,
     },
     select: {
       id: true,
@@ -25,20 +21,10 @@ export async function createComment(
   });
 }
 
-export async function updateComment(
-  commentId: number,
-  data: {
-    content?: string;
-    updatedAt: Date;
-  }
-) {
+export async function updateComment(commentId: number, content?: string) {
   return prisma.comment.update({
     where: { id: commentId },
-    data: {
-      ...(data.content !== undefined
-        ? { content: data.content, updatedAt: data.updatedAt }
-        : {}),
-    },
+    data: content !== undefined ? { content } : {},
     select: {
       id: true,
       placeId: true,
@@ -53,13 +39,17 @@ export async function deleteComment(commentId: number) {
   return { id: commentId };
 }
 
-// export async function getCommentById(commentId: number) {
-//   return prisma.comment.findUnique({
-//     where: { id: commentId },
-//     select: {
-//       id: true,
-//       placeId: true,
-//       content: true,
-//     },
-//   });
-// }
+/** 依 place + user 取得該使用者對此地點的comment（方便前端顯示 “我的comment”） */
+export function getUserCommentForPlace(placeId: number, userId: number) {
+  return prisma.comment.findUnique({
+    where: { userId_placeId: { userId, placeId } },
+    select: {
+      id: true,
+      placeId: true,
+      userId: true,
+      content: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  });
+}
