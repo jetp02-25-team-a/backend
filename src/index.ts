@@ -15,6 +15,7 @@ import jwt from "jsonwebtoken";
 import loginRouter from "./routes/api-user";
 import friendsRouter from "./routes/friend";
 import chatRouter from "./routes/chat";
+import placeRouter from "./routes/place";
 
 import http from "http";
 import { Server } from "socket.io";
@@ -99,6 +100,7 @@ app.get("/", (req: Request, res: Response) => {
 app.use("/api", loginRouter);
 app.use("/api/friendships", friendsRouter);
 app.use("/api/chat", chatRouter);
+app.use("/api/place", placeRouter);
 
 // ---------- 建立 HTTP + Socket.IO 伺服器 ----------
 const server = http.createServer(app);
