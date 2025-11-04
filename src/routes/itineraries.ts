@@ -70,7 +70,7 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
   }
 });
 
-//取得該行程的天數和天數下的所有nodes id:22
+//輸入行程id取得該行程的天數和天數下的所有nodes和node 下面的googlePlace資訊 id:22
 router.get("/detail", async (req: Request, res: Response) => {
   const { itineraryId } = req.query;
   console.log("itineraryId====>", itineraryId);
@@ -81,7 +81,11 @@ router.get("/detail", async (req: Request, res: Response) => {
         itineraryId: +itineraryId,
       },
       include: {
-        Nodes: true,
+        Nodes: {
+          include: {
+            Place: true,
+          },
+        },
         StayNodes: true,
       },
       orderBy: {
@@ -103,11 +107,11 @@ router.get("/search", async (req: Request, res: Response) => {
   //encodeURIComponent() 是用來把「文字」轉成「網址中可以安全使用的格式」。
   const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(
     query
-  )}&key=${apiKey}`;
+  )}&key=${apiKey}&language=zh-TW`;
   try {
     // 1. 用關鍵字搜尋到的資料
     const result = await fetch(url).then((r) => r.json());
-    console.log("result=>", result);
+    // console.log("result=>", result);
     // 2. 將所查到的資料存到資料庫
     if (result.status === "OK" && result.results.length > 0) {
       const createPlace = await Promise.all(
@@ -118,7 +122,8 @@ router.get("/search", async (req: Request, res: Response) => {
             where: { placeId: place.place_id },
           });
           if (exist) return exist;
-
+          console.log("exist????", exist);
+          //不存在執行創建
           return await prisma.googleMapPlace.create({
             data: {
               placeId: place.place_id,
@@ -132,8 +137,14 @@ router.get("/search", async (req: Request, res: Response) => {
         })
       );
       // 3. 在將存入資料庫的返回給 前端使用者顯示
+      //修改圖片路徑給前端完整的路徑
+      createPlace.map((c, i) => {
+        if (c.photoReference) {
+          const imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${c.photoReference}&key=${process.env.GOOGLE_API_KEY}`;
+          c.photoReference = imageUrl;
+        }
+      });
 
-      // console.log(createPlace);
       res.status(200).json({ success: true, data: createPlace });
     }
   } catch (err) {
