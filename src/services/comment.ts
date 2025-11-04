@@ -21,10 +21,14 @@ export async function createComment(
   });
 }
 
-export async function updateComment(commentId: number, content?: string) {
+export async function updateComment(
+  placeId: number,
+  commentId: number,
+  content: string
+) {
   return prisma.comment.update({
-    where: { id: commentId },
-    data: content !== undefined ? { content } : {},
+    where: { id: commentId, placeId },
+    data: content,
     select: {
       id: true,
       placeId: true,
@@ -34,8 +38,8 @@ export async function updateComment(commentId: number, content?: string) {
   });
 }
 
-export async function deleteComment(commentId: number) {
-  await prisma.comment.delete({ where: { id: commentId } });
+export async function deleteComment(placeId: number, commentId: number) {
+  await prisma.comment.delete({ where: { id: commentId, placeId } });
   return { id: commentId };
 }
 
