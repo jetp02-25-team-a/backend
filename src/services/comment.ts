@@ -53,13 +53,13 @@ export async function deleteComment(commentId: number) {
   return { id: commentId };
 }
 
-export async function getCommentById(commentId: number) {
-  return prisma.comment.findUnique({
-    where: { id: commentId },
-    select: {
-      id: true,
-      placeId: true,
-      content: true,
-    },
-  });
-}
+// export async function getCommentById(commentId: number) {
+//   return prisma.comment.findUnique({
+//     where: { id: commentId },
+//     select: {
+//       id: true,
+//       placeId: true,
+//       content: true,
+//     },
+//   });
+// }

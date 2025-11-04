@@ -5,6 +5,7 @@ import {
   searchPlacesExpanded,
   // createReview,
 } from "../services/placeSelect";
+import commentsRouter from "./comment";
 import { computeRatingInfo } from "../utils/rating";
 
 const router = Router();
@@ -99,5 +100,7 @@ const ReviewSchema = z.object({
 //   const created = await createReview(id, parsed.data);
 //   res.status(201).json({ success: true, data: created });
 // });
+// 🟢 把 comments 子路由掛進來（仍是 /places/:id/comments）
+router.use("/:id/comments", commentsRouter);
 
 export default router;
