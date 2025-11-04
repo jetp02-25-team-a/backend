@@ -68,13 +68,12 @@ router.patch("/:commentId", async (req, res) => {
       .json({ success: false, error: { message: "Invalid ids" } });
   }
 
-  const Body = z
-    .object({
-      content: z.string().min(1).optional(),
-    })
-    .refine((d) => d.content !== undefined, {
-      message: "Nothing to update",
-    });
+  const Body = z.object({
+    content: z.string().min(1).optional(),
+  });
+  // .refine((d) => d.content !== undefined, {
+  //   message: "Nothing to update",
+  // });
 
   const parsed = Body.safeParse(req.body);
   if (!parsed.success) {
