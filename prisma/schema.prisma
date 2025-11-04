@@ -870,10 +870,12 @@ model GoogleMapPlace {
   formattedAddress String   @map("formatted_address")
   lat              Float
   lng              Float
-  photoReference   String?  @map("photo_reference") // 可選，若有照片
+  photoReference   String?  @map("photo_reference") @db.Text // 可選，若有照片
   createdAt        DateTime @default(now()) @map("created_at")
 
   ItineraryNodes ItineraryNode[]
+
+  @@map("google_map_places")
 }
 
 // ----------------------------------------------------------------------
