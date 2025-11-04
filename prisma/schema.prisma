@@ -36,9 +36,8 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // 旅行筆記
-  Likes Like[]
-  Posts Post[]
-
+  Likes         Like[]
+  Posts         Post[]
   MessageBoards MessageBoard[]
 
   // 行程規劃
@@ -96,6 +95,45 @@ model City {
 // m1 旅行筆記模組
 // ----------------------------------------------------------------------
 
+// 地點表 (Location)
+model Location {
+  id Int @id @default(autoincrement()) @map("location_id")
+
+  city String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  Posts Post[]
+
+  @@map("locations")
+}
+
+// 文章表 (Post)
+model Post {
+  // PK
+  id Int @id @default(autoincrement()) @map("post_id")
+
+  userId     Int @map("user_id")
+  locationId Int @map("location_id")
+
+  title   String @db.VarChar(200) // 標題
+  content String @db.Text // 內容
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  User     User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Location Location @relation(fields: [locationId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  Likes        Like[]
+  Photos       Photo[]
+  MessageBoard MessageBoard[]
+
+  @@index([userId])
+  @@index([locationId])
+  @@map("posts")
+}
+
 // 讚表 (Like)
 model Like {
   // PK
@@ -106,35 +144,12 @@ model Like {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  User User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  Post Post @relation(fields: [postId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([userId, postId])
   @@index([postId])
   @@map("likes")
-}
-
-// 文章表 (Post)
-model Post {
-  // PK
-  id Int @id @default(autoincrement()) @map("post_id")
-
-  userId Int @map("user_id")
-
-  location String @db.VarChar(255) // 旅遊地點
-  title    String @db.VarChar(200) // 標題
-  content  String @db.Text // 內容
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  User User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  Likes  Like[]
-  Photos Photo[]
-
-  @@index([userId])
-  @@map("posts")
 }
 
 // 照片表 (Photo)
@@ -157,16 +172,18 @@ model Photo {
 // 留言板表 (MessageBoard)
 model MessageBoard {
   // PK
-  id Int @id @default(autoincrement()) @map("message_id")
+  id Int @id @default(autoincrement()) @map("message_board_id")
 
   // 欄位
   userId   Int?    @map("user_id") // 使用者 ID（可為空）
+  postId   Int     @map("post_id")
   username String? @db.VarChar(255) // 使用者名稱
   content  String? @db.VarChar(500) // 留言內容
 
   createdAt DateTime @default(now()) @map("created_at")
 
   User User? @relation(fields: [userId], references: [id])
+  Post Post  @relation(fields: [postId], references: [id])
 
   @@map("message_boards")
 }
