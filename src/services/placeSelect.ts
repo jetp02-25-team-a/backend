@@ -1,30 +1,5 @@
 import prisma, { paginate } from "../utils/prisma-pagination-place";
 
-export async function getAllPlaces(page: number, limit: number) {
-  return paginate(prisma.place, { orderBy: { id: "desc" } }, page, limit);
-}
-
-export async function getPlaceById(placeId: number) {
-  return prisma.place.findUnique({
-    where: { id: placeId },
-  });
-}
-
-export async function getPhotos(placeId: number) {
-  try {
-    const photos = await prisma.placePhoto.findMany({
-      where: { id: placeId }, // 或 where: { placeId }
-      orderBy: { id: "asc" },
-      take: 24,
-    });
-    // ✅ 即使找不到任何照片，這裡也會是 []
-    return photos;
-  } catch (error) {
-    console.error("getPhotos error:", error);
-    return []; // ✅ 發生例外也回空陣列，確保 API 可用
-  }
-}
-
 // export async function getReviews(placeId: number) {
 //   return prisma.review.findMany({
 //     where: { id: placeId },
@@ -32,14 +7,72 @@ export async function getPhotos(placeId: number) {
 //   });
 // }
 
-export async function searchPlacesWithPhotos(
-  type?: "food" | "spot",
-  keyword?: string,
-  limit = 20,
-  offset = 0,
-  photosPerPlace = 1 // 控制每個 place 要帶幾張圖
+/** 單筆詳情：Place + Photos + 評分統計 + 最新留言 */
+export async function getPlaceExpanded(
+  placeId: number,
+  options?: { photoLimit?: number; commentLimit?: number }
 ) {
-  return prisma.place.findMany({
+  const photoLimit = options?.photoLimit ?? 8;
+  const commentLimit = options?.commentLimit ?? 10;
+
+  const place = await prisma.place.findUnique({
+    where: { id: placeId }, // ← 注意：用 model 欄位名 id（已 @map("place_id")）
+    include: {
+      Photos: {
+        select: { id: true, url: true },
+        orderBy: { id: "asc" },
+        take: photoLimit,
+      },
+    },
+  });
+  if (!place) return null;
+
+  // 評分統計（請把 'score' 換成你 Rank 的實際欄位名，例如 rating）
+  const [rankAgg, commentCount, latestComments] = await Promise.all([
+    prisma.rank.aggregate({
+      where: { placeId: place.id }, // 若沒有 placeId 欄位，改成 where: { place: { id: place.id } }
+      _avg: { score: true }, // ⚠️ 這裡的 score 改成你的實際欄位
+      _count: { score: true },
+    }),
+    prisma.comment.count({
+      where: { placeId: place.id },
+    }),
+    prisma.comment.findMany({
+      where: { placeId: place.id },
+      orderBy: { createdAt: "desc" },
+      take: commentLimit,
+      select: {
+        id: true,
+        // userName: true,  // 依你的 Comment 欄位名稱調整；如 user_name 用 @map
+        content: true,
+        // rating: true,    // 若留言有星等；沒有就刪掉
+        createdAt: true,
+      },
+    }),
+  ]);
+
+  return {
+    ...place,
+    rating: {
+      avg: Number(rankAgg._avg.score ?? 0).toFixed(1), // 字串 or number 都可
+      count: rankAgg._count.score ?? 0,
+    },
+    commentCount,
+    comments: latestComments,
+  };
+}
+
+export async function searchPlacesExpanded(params: {
+  type?: "food" | "spot";
+  keyword?: string;
+  limit?: number;
+  offset?: number;
+  photosPerPlace?: number; // 每筆回傳幾張圖（預設 1，當縮圖）
+}) {
+  const { type, keyword, limit = 20, offset = 0, photosPerPlace = 1 } = params;
+
+  // 先抓 Place 清單（精簡 select）
+  const places = await prisma.place.findMany({
     where: {
       ...(type ? { type } : {}),
       ...(keyword
@@ -52,17 +85,74 @@ export async function searchPlacesWithPhotos(
           }
         : {}),
     },
-    orderBy: { id: "desc" },
+    orderBy: { id: "desc" }, // 或 id / updatedAt
     take: limit,
     skip: offset,
-    include: {
-      Photos: {
-        select: { id: true, url: true },
-        orderBy: { id: "asc" },
-        take: photosPerPlace,
-      },
+    select: {
+      id: true,
+      type: true,
+      name: true,
+      address: true,
+      region: true,
+      createdAt: true,
+      updatedAt: true,
     },
   });
+
+  if (!places.length) return [];
+
+  const ids = places.map((p) => p.id);
+
+  // 一次把所有候選 place 的照片與統計抓齊（避免 N+1）
+  const [photos, rankAggs, commentCounts] = await Promise.all([
+    prisma.placePhoto.findMany({
+      where: { placeId: { in: ids } },
+      orderBy: [{ placeId: "asc" }, { id: "asc" }],
+      select: { id: true, url: true, placeId: true },
+    }),
+    prisma.rank.groupBy({
+      by: ["placeId"],
+      where: { placeId: { in: ids } },
+      _avg: { score: true }, // ⚠️ score 換成你的欄位
+      _count: { score: true },
+    }),
+    prisma.comment.groupBy({
+      by: ["placeId"],
+      where: { placeId: { in: ids } },
+      _count: { _all: true },
+    }),
+  ]);
+  // 整理成 map 方便合併
+  const photoMap = new Map<number, { id: number; url: string }[]>();
+  for (const ph of photos) {
+    const arr = photoMap.get(ph.placeId) ?? [];
+    if (arr.length < photosPerPlace) arr.push({ id: ph.id, url: ph.url });
+    photoMap.set(ph.placeId, arr);
+  }
+
+  const rankMap = new Map<number, { avg: number; count: number }>();
+  for (const r of rankAggs) {
+    rankMap.set(r.placeId, {
+      avg: Number(r._avg.score ?? 0),
+      count: r._count.score ?? 0,
+    });
+  }
+
+  const commentMap = new Map<number, number>();
+  for (const c of commentCounts) {
+    commentMap.set(c.placeId, c._count._all);
+  }
+
+  // 合併輸出
+  return places.map((p) => ({
+    ...p,
+    Photos: photoMap.get(p.id) ?? [],
+    rating: {
+      avg: (rankMap.get(p.id)?.avg ?? 0).toFixed(1),
+      count: rankMap.get(p.id)?.count ?? 0,
+    },
+    // commentCount: commentMap.get(p.id) ?? 0,
+  }));
 }
 
 // export async function createReview(
