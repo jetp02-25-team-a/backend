@@ -73,7 +73,7 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
 //輸入行程id取得該行程的天數和天數下的所有nodes和node 下面的googlePlace資訊 id:22
 router.get("/detail", async (req: Request, res: Response) => {
   const { itineraryId } = req.query;
-  console.log("itineraryId====>", itineraryId);
+  // console.log("itineraryId====>", itineraryId);
   if (!itineraryId) return;
   try {
     const result = await prisma.itineraryDay.findMany({
@@ -83,7 +83,7 @@ router.get("/detail", async (req: Request, res: Response) => {
       include: {
         Nodes: {
           include: {
-            Place: true,
+            GoogleMapPlace: true,
           },
         },
         StayNodes: true,
@@ -138,12 +138,15 @@ router.get("/search", async (req: Request, res: Response) => {
       );
       // 3. 在將存入資料庫的返回給 前端使用者顯示
       //修改圖片路徑給前端完整的路徑
-      createPlace.map((c, i) => {
-        if (c.photoReference) {
-          const imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${c.photoReference}&key=${process.env.GOOGLE_API_KEY}`;
-          c.photoReference = imageUrl;
-        }
-      });
+      await Promise.all(
+        createPlace.map(async (c, i) => {
+          if (c.photoReference) {
+            const imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${c.photoReference}&key=${process.env.GOOGLE_API_KEY}`;
+            const response = await fetch(imageUrl);
+            c.photoReference = response.url;
+          }
+        })
+      );
 
       res.status(200).json({ success: true, data: createPlace });
     }
@@ -152,9 +155,54 @@ router.get("/search", async (req: Request, res: Response) => {
   }
 });
 
+//輸入placeId 返回資訊
+router.get("/place", async (req: Request, res: Response) => {
+  const placeId = req.query.placeId as string;
+  try {
+    const result = await prisma.googleMapPlace.findFirst({
+      where: {
+        placeId: placeId,
+      },
+    });
+
+    if (!result) return;
+    // //修改圖片路徑給前端完整的路徑
+    const imageUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${result.photoReference}&key=${process.env.GOOGLE_API_KEY}`;
+    await fetch(imageUrl).then((r) => (result.photoReference = r.url));
+
+    res.status(200).json(result);
+  } catch (err) {
+    console.log(err);
+  }
+});
+
 //新增某天的新節點
-router.post("create-node", async (req: Request, res: Response) => {
-  const { day, place } = req.body;
+router.post("/create-node", async (req: Request, res: Response) => {
+  const { day, durationMinutes, googlePlaceId } = req.body;
+  try {
+    //1.先依照googlePlaceId 找到存的id
+    const row = await prisma.googleMapPlace.findFirst({
+      where: {
+        placeId: googlePlaceId,
+      },
+    });
+    if (!row) return;
+
+    //存入node
+    const result = await prisma.itineraryNode.create({
+      data: {
+        placeId: 0,
+        googleMapPlaceId: row.id,
+        itineraryDayId: +day,
+        durationMinutes: durationMinutes,
+        status: 1,
+      },
+    });
+
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.log(err);
+  }
 });
 
 //取得所有行程(依照地區)
