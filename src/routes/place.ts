@@ -1,9 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import {
-  getPlaceById,
-  getPhotos,
-  searchPlacesWithPhotos,
+  getPlaceExpanded,
+  searchPlacesExpanded,
   // createReview,
 } from "../services/placeSelect";
 import { computeRatingInfo } from "../utils/rating";
@@ -15,20 +14,29 @@ const router = Router();
  * 可選 query：type=food|spot、q=keyword、limit、offset
  */
 router.get("/", async (req, res) => {
-  const id = Number(req.params.id);
-  const type = (req.query.type as "food" | "spot" | undefined) || undefined;
-  const q = (req.query.q as string | undefined) || undefined;
-  const limit = Math.min(Number(req.query.limit ?? 20), 100);
-  const offset = Number(req.query.offset ?? 0);
-  const photosPerPlace = Math.min(Number(req.query.photos ?? 1), 5); // 可透過 query 控制
+  const Query = z.object({
+    type: z.enum(["food", "spot"]).optional(),
+    q: z.string().optional(),
+    limit: z.coerce.number().min(1).max(100).default(20),
+    offset: z.coerce.number().min(0).default(0),
+    photos: z.coerce.number().min(0).max(5).default(1),
+  });
 
-  const rows = await searchPlacesWithPhotos(
+  const parsed = Query.safeParse(req.query);
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ success: false, error: parsed.error.flatten() });
+  }
+  const { type, q, limit, offset, photos } = parsed.data;
+
+  const rows = await searchPlacesExpanded({
     type,
-    q,
+    keyword: q,
     limit,
     offset,
-    photosPerPlace
-  );
+    photosPerPlace: photos,
+  });
 
   res.json({ success: true, data: rows });
 });
@@ -37,31 +45,22 @@ router.get("/", async (req, res) => {
  * GET /places/:id
  * 回傳：place、photos、reviews、rating(平均/分布/數量)
  */
+/** GET /places/:id : 單筆詳情（含多張照片、統計、最新留言） */
 router.get("/:id", async (req, res) => {
   const id = Number(req.params.id);
-  if (Number.isNaN(id))
+  if (!Number.isInteger(id)) {
     return res
       .status(400)
       .json({ success: false, error: { message: "Invalid id" } });
+  }
 
-  const place = await getPlaceById(id);
-  if (!place)
+  const data = await getPlaceExpanded(id, { photoLimit: 12, commentLimit: 20 });
+  if (!data)
     return res
       .status(404)
       .json({ success: false, error: { message: "Place not found" } });
 
-  const [photos] = await Promise.all([getPhotos(id)]);
-  // const rating = computeRatingInfo(reviews);
-
-  res.json({
-    success: true,
-    data: {
-      place,
-      photos,
-
-      // rating,
-    },
-  });
+  res.json({ success: true, data });
 });
 
 /**
