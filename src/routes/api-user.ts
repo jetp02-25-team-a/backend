@@ -1,6 +1,7 @@
 import express, { request } from "express";
 import type { Request, Response } from "express";
 import { prisma } from "../utils/prisma-pagination.js";
+import upload from "../utils/upload-images.js";
 import { success, z } from "zod";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
@@ -13,6 +14,13 @@ import type {
 } from "../interfaces/index.js";
 import { loginSchema } from "../schemas/index.js";
 import { jwtParseMiddleware, requireAuth } from "../middleware/jwt.js";
+
+interface UserUpdateData {
+  nickname?: string | null;
+  description?: string | null;
+  fullName?: string | null;
+  avatar?: string | null;
+}
 
 const router = express.Router();
 
@@ -128,6 +136,14 @@ router.get("/user/:id", async (req: Request, res: Response) => {
     },
   });
 
+  if (!data) {
+    return res.status(404).json({
+      success: false,
+      data: null,
+      message: "找不到指定的會員", // 或是 "User not found"
+    });
+  }
+
   const response = {
     success: true,
     data: {
@@ -148,8 +164,10 @@ router.put(
   "/user/:id",
   jwtParseMiddleware,
   requireAuth,
+  upload.single("avatar"),
   async (req: Request, res: Response<ApiResponse>) => {
     const { nickname, description, fullName } = req.body;
+    const filename = req.file?.filename;
     const user_id = parseInt(req.params.id);
     if (isNaN(user_id)) {
       const response = {
@@ -159,13 +177,19 @@ router.put(
       return res.status(400).json(response);
     }
 
+    const updateData: UserUpdateData = {
+      nickname: nickname,
+      description: description,
+      fullName: fullName,
+    };
+
+    if (req.file) {
+      updateData.avatar = filename;
+    }
+
     const r = await prisma.user.update({
       where: { id: user_id },
-      data: {
-        nickname: nickname || null,
-        description: description || null,
-        fullName: fullName || null,
-      },
+      data: updateData,
     });
 
     const response = {
