@@ -79,11 +79,29 @@ router.get("/detail", async (req: Request, res: Response) => {
     const result = await prisma.itineraryDay.findMany({
       where: {
         itineraryId: +itineraryId,
+        status: 1,
       },
-      include: {
+      select: {
+        id: true,
+        itineraryId: true,
+        dayDate: true,
+        startTime: true,
         Nodes: {
-          include: {
-            GoogleMapPlace: true,
+          select: {
+            id: true,
+            durationMinutes: true,
+            GoogleMapPlace: {
+              select: {
+                id: true,
+                placeId: true,
+                name: true,
+                createdAt: true,
+                formattedAddress: true,
+                lat: true,
+                lng: true,
+                photoReference: true,
+              },
+            },
           },
         },
         StayNodes: true,
@@ -92,7 +110,26 @@ router.get("/detail", async (req: Request, res: Response) => {
         dayDate: "asc",
       },
     });
-    res.status(200).json({ success: true, data: result });
+
+    //改寫路徑
+
+    const transformed = result.map((day) => ({
+      ...day,
+      Nodes: day.Nodes.map((node) => ({
+        ...node,
+        GoogleMapPlace: node.GoogleMapPlace
+          ? {
+              ...node.GoogleMapPlace,
+              // 將 photoReference 改為完整網址
+              photoReference: node.GoogleMapPlace.photoReference
+                ? `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${node.GoogleMapPlace.photoReference}&key=${process.env.GOOGLE_API_KEY}`
+                : null,
+            }
+          : null,
+      })),
+    }));
+
+    res.status(200).json({ success: true, data: transformed });
   } catch (err) {
     console.log(err);
   }
