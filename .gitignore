@@ -6,6 +6,7 @@ Thumbs.db
 sessions
 
 /public/css/app.css
+/public/images
 
 prisma/migrations
 
