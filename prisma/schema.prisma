@@ -593,11 +593,12 @@ model Place {
   City   City? @relation(fields: [cityId], references: [id], onDelete: SetNull)
 
   // 🔹 回指關聯
-  Photos    PlacePhoto[]
-  Favorites Favorite[]
-  Comments  Comment[]
-  Ranks     Rank[]
-  Histories History[]
+  Photos       PlacePhoto[]
+  Favorites    Favorite[]
+  Comments     Comment[]
+  Ranks        Rank[]
+  Histories    History[]
+  OpeningHours OpeningHour[]
 
   // 🔹 索引
   @@index([type, region])
@@ -702,6 +703,25 @@ model History {
   @@unique([userId, placeId])
   @@index([userId, lastViewedAt(sort: Desc)])
   @@map("histories")
+}
+
+// 營業時段表
+model OpeningHour {
+  id        Int      @id @default(autoincrement()) @map("opening_hour_id")
+  placeId   Int      @map("place_id")
+  weekday   Int      @map("weekday") @db.TinyInt // 0=Sun, 6=Sat
+  openTime  DateTime @map("open_time") @db.Time(0) // 24h, e.g. 11:00:00
+  closeTime DateTime @map("close_time") @db.Time(0) // 24h, e.g. 21:30:00
+  isClosed  Boolean  @default(false) @map("is_closed") // 公休
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  Place Place @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@unique([placeId, weekday])
+  @@index([placeId, weekday])
+  @@map("opening_hours")
 }
 
 // ----------------------------------------------------------------------
