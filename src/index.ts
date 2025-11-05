@@ -18,6 +18,7 @@ import chatRouter from "./routes/chat";
 import placeRouter from "./routes/place";
 import featuredRouter from "./routes/place-features";
 import searchRouter from "./routes/place-search";
+import articleRouter from "./routes/article.routes";
 
 import http from "http";
 import { Server } from "socket.io";
@@ -105,6 +106,7 @@ app.use("/api/chat", chatRouter);
 app.use("/api/place/featured", featuredRouter);
 app.use("/api/place/search", searchRouter);
 app.use("/api/place", placeRouter);
+app.use("/api/article", articleRouter);
 
 // ---------- 建立 HTTP + Socket.IO 伺服器 ----------
 const server = http.createServer(app);
