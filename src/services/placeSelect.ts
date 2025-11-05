@@ -43,13 +43,43 @@ export async function getPlaceExpanded(
       take: commentLimit,
       select: {
         id: true,
-        // userName: true,  // 依你的 Comment 欄位名稱調整；如 user_name 用 @map
+        userId: true,
         content: true,
-        // rating: true,    // 若留言有星等；沒有就刪掉
         createdAt: true,
+        User: {
+          select: {
+            fullName: true,
+            avatar: true,
+          },
+        },
       },
     }),
   ]);
+
+  const commentRaw = latestComments.map((c) => ({
+    id: c.id,
+    userId: c.userId,
+    fullName: c.User?.fullName ?? null,
+    avatar: c.User?.avatar ?? null,
+    content: c.content,
+    createdAt: c.createdAt,
+  }));
+
+  // 取這批留言的 userId
+  const userIds = [...new Set(commentRaw.map((c) => c.userId))];
+
+  // 批次撈這些 user 在此地點的評分
+  const ranks = await prisma.rank.findMany({
+    where: { placeId: place.id, userId: { in: userIds } },
+    select: { userId: true, score: true },
+  });
+  const scoreMap = new Map(ranks.map((r) => [r.userId, r.score]));
+
+  // 合併回留言
+  const comments = commentRaw.map((c) => ({
+    ...c,
+    score: scoreMap.get(c.userId) ?? null,
+  }));
 
   return {
     ...place,
@@ -58,7 +88,7 @@ export async function getPlaceExpanded(
       count: rankAgg._count.score ?? 0,
     },
     commentCount,
-    comments: latestComments,
+    comments: comments,
   };
 }
 
