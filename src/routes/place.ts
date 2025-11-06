@@ -106,7 +106,7 @@ const ReviewSchema = z.object({
 // });
 // 🟢 把 comments 子路由掛進來（仍是 /places/:id/comments）
 
-router.use("/:id/place-comments", commentsRouter);
-router.use("/:id/place-ranks", rankRouter);
+router.use("/:id/comments", commentsRouter);
+router.use("/:id/ranks", rankRouter);
 
 export default router;
