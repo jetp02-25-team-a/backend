@@ -39,7 +39,7 @@ export async function getPlaceExpanded(
     }),
     prisma.comment.findMany({
       where: { placeId: place.id },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
       take: commentLimit,
       select: {
         id: true,
