@@ -18,6 +18,7 @@ import chatRouter from "./routes/chat";
 import placeRouter from "./routes/place";
 import featuredRouter from "./routes/place-features";
 import searchRouter from "./routes/place-search";
+import favoriteRouter from "./routes/place-favorite";
 import articleRouter from "./routes/article.routes";
 import likeroutes from "./routes/likeroutes";
 import mallRouter from "./routes/api-mall";
@@ -112,6 +113,7 @@ app.use("/api/chat", chatRouter);
 app.use("/api/place/featured", featuredRouter);
 app.use("/api/place/search", searchRouter);
 app.use("/api/place", placeRouter);
+app.use("/api/favorite", favoriteRouter);
 app.use("/api/article", articleRouter);
 app.use("/api/itineraries", itinerariesRouter);
 
