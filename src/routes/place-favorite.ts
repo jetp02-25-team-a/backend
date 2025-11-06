@@ -52,6 +52,30 @@ router.get("/", async (req, res) => {
   }
 });
 
+// 檢查是否收藏(一進入place畫面使用)
+router.get("/check", async (req, res) => {
+  try {
+    const userId = Number(req.query?.userId);
+    const placeId = Number(req.query?.placeId);
+    if (!userId || !placeId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "缺少 userId 或 placeId" });
+    }
+
+    const exist = await prisma.favorite.findUnique({
+      where: { userId_placeId: { userId, placeId } },
+      select: { id: true },
+    });
+
+    return res.json({ success: true, favorited: !!exist });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ success: false, message: "伺服器錯誤", error });
+  }
+});
+
 // 新增收藏
 router.post("/", async (req, res) => {
   try {
