@@ -81,12 +81,19 @@ export async function getPlaceExpanded(
     score: scoreMap.get(c.userId) ?? null,
   }));
 
+  // 撈出Opening Hours
+  const openingHour = await prisma.openingHour.findMany({
+    where: { placeId: place.id },
+    select: { weekday: true, openTime: true, closeTime: true },
+  });
+
   return {
     ...place,
     rating: {
       avg: Number(rankAgg._avg.score ?? 0).toFixed(1), // 字串 or number 都可
       count: rankAgg._count.score ?? 0,
     },
+    openingHour,
     commentCount,
     comments: comments,
   };
@@ -184,23 +191,3 @@ export async function searchPlacesExpanded(params: {
     // commentCount: commentMap.get(p.id) ?? 0,
   }));
 }
-
-// export async function createReview(
-//   placeId: number,
-//   data: {
-//     user_name: string;
-//     user_avatar?: string | null;
-//     rating: number;
-//     content: string;
-//   }
-// ) {
-//   return prisma.review.create({
-//     data: {
-//       id: placeId,
-//       user_name: data.user_name,
-//       user_avatar: data.user_avatar ?? null,
-//       rating: data.rating,
-//       content: data.content,
-//     },
-//   });
-// }
