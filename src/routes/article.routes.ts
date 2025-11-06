@@ -23,11 +23,10 @@ router.post("/", upload.array("photo"), async (req: Request, res: Response) => {
 
     // const imageUrl = req.file ? `/images/${req.file.filename}` : null
 
-    const photos = (req.files as Express.Multer.File[] | undefined)?.map(
-      (f) => {
+    const photos =
+      (req.files as Express.Multer.File[] | undefined)?.map((f) => {
         return { url: `/images/${f.filename}` };
-      }
-    ) || [];
+      }) || [];
 
     const newPost = await prisma.post.create({
       data: {
@@ -63,7 +62,21 @@ router.get("/", async (_req: Request, res: Response) => {
         Likes: true,
       },
     });
-    res.json(posts);
+    console.log(posts)
+
+    const cards = [];
+
+    for (let i = 0; i < posts.length; i++) {
+      const card = {
+        id: posts[i].id,
+        title: posts[i].title,
+        location: posts[i].Location.city,
+        imgUrl: posts[i]?.Photos[0]?.url  || '',
+      };
+      cards.push(card);
+    }
+
+    res.json(cards);
   } catch (error) {
     console.error("❌ Error fetching posts:", error);
     res
