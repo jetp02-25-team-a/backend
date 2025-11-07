@@ -19,6 +19,7 @@ import placeRouter from "./routes/place";
 import featuredRouter from "./routes/place-features";
 import searchRouter from "./routes/place-search";
 import favoriteRouter from "./routes/place-favorite";
+import mapRouter from "./routes/place-leaflet";
 import articleRouter from "./routes/article.routes";
 import likeroutes from "./routes/likeroutes";
 import mallRouter from "./routes/api-mall";
@@ -110,6 +111,7 @@ app.get("/", (req: Request, res: Response) => {
 app.use("/api", loginRouter);
 app.use("/api/friendships", friendsRouter);
 app.use("/api/chat", chatRouter);
+app.use("/api/map", mapRouter);
 app.use("/api/place/featured", featuredRouter);
 app.use("/api/place/search", searchRouter);
 app.use("/api/place", placeRouter);
