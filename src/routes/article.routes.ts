@@ -1,57 +1,77 @@
 // File: routes/article.route.ts
 
+
 import type { Request, Response } from "express";
-import express from "express";
-// import express, { Request, Response } from 'express'
-import upload from "../utils/upload-images";
-// import { PrismaClient } from '../generated/prisma/client';
+ import express from "express";
+import upload from "../utils/upload-images.js";
 import { prisma } from "../utils/prisma-pagination.js";
 
 const router = express.Router();
-// const prisma = new PrismaClient()
 
-// 🚀 POST: Buat artikel baru dengan upload foto
+/**
+ * ============================
+ * POST /article
+ * make new article + upload foto
+ * ============================
+ */
 router.post("/", upload.array("photo"), async (req: Request, res: Response) => {
   try {
     const { title, content, userId, locationId } = req.body;
-    // Validasi minimal
+
+    // 🔍 Validasi minimal
     if (!title || !userId || !locationId) {
-      return res
-        .status(400)
-        .json({ error: "title, userId, dan locationId wajib diisi" });
+      return res.status(400).json({
+        success: false,
+        message: "title, userId, dan locationId wajib diisi",
+      });
     }
 
-    // const imageUrl = req.file ? `/images/${req.file.filename}` : null
-
+    // 🔗 prepare data photo jika ada
     const photos =
-      (req.files as Express.Multer.File[] | undefined)?.map((f) => {
-        return { url: `/images/${f.filename}` };
-      }) || [];
+      (req.files as Express.Multer.File[] | undefined)?.map((f) => ({
+        url: `/images/${f.filename}`,
+      })) || [];
 
+    // 🧩 save to database
     const newPost = await prisma.post.create({
       data: {
+        title,
+        content,
         User: { connect: { id: parseInt(userId) } },
         Location: { connect: { id: parseInt(locationId) } },
-        title: title,
-        content: content,
-        Photos: {
-          createMany: { data: photos },
-        },
+        Photos: { createMany: { data: photos } },
+      },
+      include: {
+        Location: true,
+        Photos: true,
       },
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Post created successfully",
-      post: newPost,
+      post: {
+        id: newPost.id,
+        title: newPost.title,
+        location: newPost.Location?.city || "未知地點",
+        imgUrl: newPost.Photos?.[0]?.url || "",
+      },
     });
   } catch (error) {
     console.error("❌ Error creating post:", error);
-    res.status(500).json({ success: false, message: "Failed to save post" });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to save post",
+    });
   }
 });
 
-// 📥 GET semua artikel
+/**
+ * ============================
+ * GET /article
+ * take all article
+ * ============================
+ */
 router.get("/", async (_req: Request, res: Response) => {
   try {
     const posts = await prisma.post.findMany({
@@ -61,33 +81,40 @@ router.get("/", async (_req: Request, res: Response) => {
         Photos: true,
         Likes: true,
       },
+      orderBy: { id: "desc" },
     });
-    console.log(posts)
 
-    const cards = [];
+    // 🔒 Pastikan semua properti aman
+    const cards = posts.map((post) => ({
+      id: post.id,
+      title: post.title,
+      location: post.Location?.id || "未知地點",
+      imgUrl: post.Photos?.[0]?.url || "",
+    }));
 
-    for (let i = 0; i < posts.length; i++) {
-      const card = {
-        id: posts[i].id,
-        title: posts[i].title,
-        location: posts[i].Location.city,
-        imgUrl: posts[i]?.Photos[0]?.url  || '',
-      };
-      cards.push(card);
-    }
-
-    res.json(cards);
+    return res.json(cards);
   } catch (error) {
     console.error("❌ Error fetching posts:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to retrieve posts" });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve posts",
+    });
   }
 });
 
-// 📥 GET artikel berdasarkan ID
+/**
+ * ============================
+ * GET /article/:id
+ * Ambil artikel berdasarkan ID
+ * ============================
+ */
 router.get("/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
+
+  if (!id || isNaN(parseInt(id))) {
+    return res.status(400).json({ message: "Invalid post ID" });
+  }
+
   try {
     const post = await prisma.post.findUnique({
       where: { id: parseInt(id) },
@@ -103,15 +130,151 @@ router.get("/:id", async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    res.json(post);
+    // 💡 Format respons agar frontend langsung bisa pakai
+    const formattedPost = {
+      id: post.id,
+      title: post.title,
+      content: post.content,
+      author: post.User?.name || "未知作者",
+      location: post.Location?.city || "未知地點",
+      photos: post.Photos?.map((p) => p.url) || [],
+      likesCount: post.Likes?.length || 0,
+    };
+
+    return res.json(formattedPost);
   } catch (error) {
-    res.status(500).json({ message: "Error retrieving post" });
+    console.error("❌ Error retrieving post:", error);
+    return res.status(500).json({ message: "Error retrieving post" });
   }
 });
 
 export default router;
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+// import type { Request, Response } from "express";
 // import express from "express";
+// // import express, { Request, Response } from 'express'
+// import upload from "../utils/upload-images";
+// // import { PrismaClient } from '../generated/prisma/client';
+// import { prisma } from "../utils/prisma-pagination.js";
+
+// const router = express.Router();
+// // const prisma = new PrismaClient()
+
+// // 🚀 POST: make new article with upload photo
+// router.post("/", upload.array("photo"), async (req: Request, res: Response) => {
+//   try {
+//     const { title, content, userId, locationId } = req.body;
+//     // Validasi minimal
+//     if (!title || !userId || !locationId) {
+//       return res
+//         .status(400)
+//         .json({ error: "title, userId, dan locationId wajib diisi" });
+//     }
+
+//     // const imageUrl = req.file ? `/images/${req.file.filename}` : null
+
+//     const photos =
+//       (req.files as Express.Multer.File[] | undefined)?.map((f) => {
+//         return { url: `/images/${f.filename}` };
+//       }) || [];
+
+//     const newPost = await prisma.post.create({
+//       data: {
+//         User: { connect: { id: parseInt(userId) } },
+//         Location: { connect: { id: parseInt(locationId) } },
+//         title: title,
+//         content: content,
+//         Photos: {
+//           createMany: { data: photos },
+//         },
+//       },
+//     });
+
+//     res.status(201).json({
+//       success: true,
+//       message: "Post created successfully",
+//       post: newPost,
+//     });
+//   } catch (error) {
+//     console.error("❌ Error creating post:", error);
+//     res.status(500).json({ success: false, message: "Failed to save post" });
+//   }
+// });
+
+// // 📥 GET all article
+// router.get("/", async (_req: Request, res: Response) => {
+//   try {
+//     const posts = await prisma.post.findMany({
+//       include: {
+//         User: true,
+//         Location: true,
+//         Photos: true,
+//         Likes: true,
+//       },
+//     });
+//     console.log(posts)
+
+//     const cards = [];
+
+//     for (let i = 0; i < posts.length; i++) {
+//       const card = {
+//         id: posts[i].id,
+//         title: posts[i].title,
+//         location: posts[i].Location.city,
+//         imgUrl: posts[i]?.Photos[0]?.url  || '',
+//       };
+//       cards.push(card);
+//     }
+
+//     res.json(cards);
+//   } catch (error) {
+//     console.error("❌ Error fetching posts:", error);
+//     res
+//       .status(500)
+//       .json({ success: false, message: "Failed to retrieve posts" });
+//   }
+// });
+
+// // 📥 Get all article depend on ID
+// router.get("/:id", async (req: Request, res: Response) => {
+//   const { id } = req.params;
+//   try {
+//     const post = await prisma.post.findUnique({
+//       where: { id: parseInt(id) },
+//       include: {
+//         User: true,
+//         Location: true,
+//         Photos: true,
+//         Likes: true,
+//       },
+//     });
+
+//     if (!post) {
+//       return res.status(404).json({ message: "Post not found" });
+//     }
+
+//     res.json(post);
+//   } catch (error) {
+//     res.status(500).json({ message: "Error retrieving post" });
+//   }
+// });
+
+// export default router;
+
+//// import express from "express";
 // import type { Request, Response } from "express";
 
 // // import type { Request, Response, NextFunction } from "express"; // Import tipe Express
