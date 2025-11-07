@@ -1,6 +1,6 @@
 import express from "express";
 import type { Request, Response } from "express";
-import { json, success } from "zod";
+import { json, object, success } from "zod";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { prisma } from "../utils/prisma-pagination";
 import moment from "moment-timezone";
@@ -87,9 +87,13 @@ router.get("/detail", async (req: Request, res: Response) => {
         dayDate: true,
         startTime: true,
         Nodes: {
+          where: {
+            status: 1,
+          },
           select: {
             id: true,
             durationMinutes: true,
+            placeId: true,
             GoogleMapPlace: {
               select: {
                 id: true,
@@ -102,6 +106,9 @@ router.get("/detail", async (req: Request, res: Response) => {
                 photoReference: true,
               },
             },
+          },
+          orderBy: {
+            placeId: "asc",
           },
         },
         StayNodes: true,
@@ -159,7 +166,7 @@ router.get("/search", async (req: Request, res: Response) => {
             where: { placeId: place.place_id },
           });
           if (exist) return exist;
-          console.log("exist????", exist);
+          // console.log("exist????", exist);
           //不存在執行創建
           return await prisma.googleMapPlace.create({
             data: {
@@ -213,43 +220,222 @@ router.get("/place", async (req: Request, res: Response) => {
   }
 });
 
-//新增某天的新節點
-router.post("/create-node", async (req: Request, res: Response) => {
-  const { day, durationMinutes, googlePlaceId } = req.body;
+// 定義資料結構
+interface Itinerary {
+  id?: number;
+  itineraryId: number;
+  dayDate: string | Date;
+  startTime: string | Date;
+  status?: number;
+  Nodes?: any[];
+  StayNodes?: any[];
+  [key: string]: any; // 👈 這行是關鍵，允許用字串 key 存取屬性
+}
+
+// 更新行程
+router.post("/save", async (req: Request, res: Response) => {
   try {
-    //1.先依照googlePlaceId 找到存的id
-    const row = await prisma.googleMapPlace.findFirst({
-      where: {
-        placeId: googlePlaceId,
-      },
-    });
-    if (!row) return;
+    const { itineraryData: newItinerary } = req.body;
+    console.log(newItinerary);
+    // console.log("==>", newItinerary[1].Nodes);
 
-    //存入node
-    const result = await prisma.itineraryNode.create({
-      data: {
-        placeId: 0,
-        googleMapPlaceId: row.id,
-        itineraryDayId: +day,
-        durationMinutes: durationMinutes,
-        status: 1,
-      },
+    //抓 itineraryId
+    const itineraryId = newItinerary[0]?.itineraryId;
+    if (!itineraryId) {
+      return res.status(400).json({ error: "缺少 itineraryId" });
+    }
+
+    //從資料庫取舊資料
+    const oldItinerary: Itinerary[] = await prisma.itineraryDay.findMany({
+      where: { itineraryId },
     });
 
-    res.status(200).json({ success: true });
+    //用陣列裝所有的promise
+    const updatePromises: Promise<any>[] = [];
+
+    //3.比對差異 ＝>找出行程還存在 但日期基本數值修改了
+    console.log("is run compare");
+    await Promise.all(
+      newItinerary.map(async (nd: any, ni: number) => {
+        //排除掉沒有id的新物件
+        if (nd.id === undefined) return;
+        oldItinerary.map((od: any, oi: number) => {
+          //找出行程還存在 但日期基本數值修改了
+          if (od.id === nd.id) {
+            for (const key of Object.keys(od)) {
+              if (
+                od[key] !== nd[key] &&
+                nd[key] !== undefined &&
+                new Date(od[key]).toISOString() !==
+                  new Date(nd[key]).toISOString()
+              ) {
+                // console.log(
+                //   `${key}=====>///od:${od[key]} / nd:${nd[key]}___od.id_${od.id}`
+                // );
+                updatePromises.push(
+                  prisma.itineraryDay.update({
+                    where: {
+                      id: od.id,
+                    },
+                    data: {
+                      dayDate: nd[key],
+                    },
+                  })
+                );
+              }
+            }
+          }
+        });
+        // 建立天以下所有行程
+        const nodes = nd.Nodes;
+        //先找到存在的nodes
+        const exsitNodes = await prisma.itineraryNode.findMany({
+          where: {
+            itineraryDayId: nd.id,
+          },
+          select: {
+            placeId: true,
+            googleMapPlaceId: true,
+          },
+        });
+        const newNodes = nodes.filter((n: any, i: number) => {
+          console.log("ru!!!", exsitNodes.length);
+          if (exsitNodes.length === 0) {
+            return true;
+          } else {
+            return !exsitNodes.some(
+              (en) =>
+                en.googleMapPlaceId === n.GoogleMapPlace.id && en.placeId === i
+            );
+            // exsitNodes.forEach((en: any, ei: number) => {
+            //   console.log("//", en.googleMapPlaceId);
+            //   console.log("//", n.GoogleMapPlace.id);
+            //   console.log("//", en.placeId);
+            //   console.log("//", i);
+            //   if (en.google_map_place_id !== n.id && en.placeId !== i) return n;
+            // });
+          }
+        });
+        console.log("newNodes==>", newNodes);
+        // const newNodes = nodes.filter((node: any, index: number) => {
+        //   //node.id === googlemaplace.  | index exsitNodes.placeId
+        //   return !exsitNodes.some(
+        //     (ex: any) =>
+        //       ex.placeId !== index + 1 && // index 對應 placeId
+        //       ex.googleMapPlaceId !== node.GoogleMapPlace.id
+        //   );
+        // });
+        // const newNodes = nodes.filter((node: any, index: number) => {
+        //   return !exsitNodes.some(
+        //     (ex: any) =>
+        //       ex.placeId === index + 1 &&
+        //       ex.googleMapPlaceId === node.GoogleMapPlace.id
+        //   );
+        // });
+        // console.log("newNodes", newNodes);
+        if (newNodes.length > 0) {
+          // console.log("newNodes大於0", newNodes.length);
+          newNodes.map((node: any, index: number) => {
+            // //先找出開天行程下是否有相同行程 place_id 跟 googleMapPlaceId 已經存在
+            // console.log("newNodes進行map....", node);
+            // console.log("node.id==>", node.id);
+            // if (node.id) {
+            // console.log("建立天以下所有行程....");
+            // console.log(nd.id);
+            // console.log(index);
+            // console.log(node.durationMinutes);
+            // console.log(node.GoogleMapPlace.id);
+
+            updatePromises.push(
+              prisma.itineraryNode.create({
+                data: {
+                  status: 1,
+                  itineraryDayId: nd.id,
+                  placeId: index,
+                  durationMinutes: node.durationMinutes,
+                  googleMapPlaceId: node.GoogleMapPlace.id,
+                },
+              })
+            );
+            // }
+          });
+        }
+      })
+    );
+    // console.log("is run compare1");
+    //4.找出被"刪除"掉的天數
+    const newIds = newItinerary.map((d: any) => d.id);
+    const delatedIds = oldItinerary //被刪除的天數
+      .filter((nd: any) => !newIds.includes(nd.id))
+      .map((d: any) => d.id);
+    //將刪除的天數隱藏 delatedIds有資料再執行
+    if (delatedIds.length > 0) {
+      delatedIds.map((i: number) => {
+        updatePromises.push(
+          prisma.itineraryDay.update({
+            where: {
+              id: i,
+            },
+            data: {
+              status: 0,
+            },
+          })
+        );
+      });
+    }
+
+    // new 裡面沒有id 的新建立到資料庫中 <= 天數ｏｎｌｙ
+    newItinerary.map((d: any) => {
+      if (!("id" in d)) {
+        //建立天
+        updatePromises.push(
+          prisma.itineraryDay.create({
+            data: {
+              itineraryId: itineraryId,
+              dayDate: new Date(d.dayDate),
+              startTime: new Date(d.startTime),
+              status: 1,
+            },
+          })
+        );
+      }
+    });
+
+    // console.log("is run compare4");
+    //等待全部的 promis 完成
+    await Promise.all(updatePromises);
+
+    res.json({ success: true, message: "比對完成，請查看 console 輸出" });
   } catch (err) {
-    console.log(err);
+    res.status(500).json({ error: "伺服器錯誤" });
   }
 });
 
 //取得所有行程(依照地區)
-router.get("/itineraries", async (req: Request, res: Response) => {
+router.get("/area", async (req: Request, res: Response) => {
   const { area } = req.query;
+  console.log("area:", area);
   if (!area) return;
   try {
     const allItinerary = await prisma.itinerary.findMany({
       where: {
         area: area.toString(),
+        status: 1,
+      },
+      select: {
+        title: true,
+        figure: true,
+        User: {
+          select: {
+            nickname: true,
+          },
+        },
+        Images: {
+          select: {
+            itineraryId: true,
+            imageName: true,
+          },
+        },
       },
     });
     res.status(200).json({ success: true, data: allItinerary });
