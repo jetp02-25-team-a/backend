@@ -1,6 +1,6 @@
 import express from "express";
 import type { Request, Response } from "express";
-import { json, object, success } from "zod";
+import { json, object, success, tuple } from "zod";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { prisma } from "../utils/prisma-pagination";
 import moment from "moment-timezone";
@@ -137,6 +137,75 @@ router.get("/detail", async (req: Request, res: Response) => {
     }));
 
     res.status(200).json({ success: true, data: transformed });
+  } catch (err) {
+    console.log(err);
+  }
+});
+//輸入行程id取得該行程的天數和天數下的所有nodes和node 下面的googlePlace資訊 id:22 包含持有者user資料
+router.get("/itinerary-list", async (req: Request, res: Response) => {
+  const { itineraryId, userId } = req.query;
+  // console.log("itineraryId====>", itineraryId);
+  if (!itineraryId || !userId) return;
+  try {
+    const result = await prisma.user.findMany({
+      where: {
+        id: +userId,
+      },
+      select: {
+        fullName: true,
+        nickname: true,
+        Itineraries: {
+          where: {
+            id: +itineraryId,
+            status: 1,
+          },
+          include: {
+            Days: {
+              select: {
+                dayDate: true,
+                startTime: true,
+                Nodes: {
+                  where: {
+                    status: 1,
+                  },
+                  select: {
+                    durationMinutes: true,
+                    GoogleMapPlace: {
+                      select: {
+                        name: true,
+                        lat: true,
+                        lng: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            Images: {
+              select: {
+                imageName: true,
+              },
+            },
+            ItineraryComments: {
+              select: {
+                senderId: true,
+                content: true,
+                updatedAt: true,
+              },
+            },
+            Article: {
+              select: {
+                title: true,
+                content: true,
+                publishedAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    res.status(200).json({ success: true, data: result });
   } catch (err) {
     console.log(err);
   }
@@ -423,17 +492,27 @@ router.get("/area", async (req: Request, res: Response) => {
         status: 1,
       },
       select: {
+        id: true,
         title: true,
         figure: true,
         User: {
           select: {
+            id: true,
+            fullName: true,
             nickname: true,
+            avatar: true,
           },
         },
         Images: {
           select: {
             itineraryId: true,
             imageName: true,
+          },
+        },
+        Article: {
+          select: {
+            title: true,
+            content: true,
           },
         },
       },
