@@ -135,7 +135,7 @@ router.get("/:id", async (req: Request, res: Response) => {
       id: post.id,
       title: post.title,
       content: post.content,
-      author: post.User?.name || "未知作者",
+      author: post.User?.userid || "未知作者",
       location: post.Location?.city || "未知地點",
       photos: post.Photos?.map((p) => p.url) || [],
       likesCount: post.Likes?.length || 0,
