@@ -824,6 +824,7 @@ model Itinerary {
   Images            ItineraryImage[]
   UserLinked        UserItinerary[]
   ItineraryComments ItineraryComment[]
+  Article           Article?
 
   @@map("itineraries")
 }
@@ -899,7 +900,7 @@ model ItineraryComment {
   @@map("itinerary_comments")
 }
 
-/////////////--------------------
+// ----------------- GoogleMapPlace  -----------------
 model GoogleMapPlace {
   id               Int      @id @default(autoincrement()) @map("google_map_place_id")
   placeId          String   @unique @map("place_id") // Google 提供的 place_id
@@ -913,6 +914,19 @@ model GoogleMapPlace {
   ItineraryNodes ItineraryNode[]
 
   @@map("google_map_places")
+}
+
+// ----------------- Article  -----------------
+model Article {
+  id          Int      @id @default(autoincrement()) @map("article_id")
+  itineraryId Int      @unique @map("itinerary_id")
+  title       String
+  content     String   @db.Text
+  publishedAt DateTime @default(now()) @map("published_at")
+
+  Itinerary Itinerary @relation(fields: [itineraryId], references: [id])
+
+  @@map("articles")
 }
 
 // ----------------------------------------------------------------------
