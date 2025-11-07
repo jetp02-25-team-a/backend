@@ -129,6 +129,7 @@ export async function searchPlacesExpanded(params: {
       id: true,
       type: true,
       name: true,
+      introduce: true,
       address: true,
       region: true,
       createdAt: true,
