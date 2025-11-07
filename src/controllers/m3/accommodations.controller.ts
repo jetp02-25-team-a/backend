@@ -3,6 +3,7 @@ import {
   findAllAccommodations,
   findAccommodationById,
   findAccommodationsList,
+  searchAccommodations,
 } from "../../services/m3";
 import {
   accommodationQuerySchema,
@@ -50,6 +51,50 @@ export const getAccommodationList = async (
 
     const accommodations = await findAccommodationsList(sort);
     res.json(accommodations);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 搜尋結果列表用
+export const getAccommodationSearch = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const {
+      keyword,
+      city,
+      boundingBox,
+      checkInDate,
+      checkOutDate,
+      guestCount,
+      sort,
+      cursor,
+      limit,
+    } = req.query;
+
+    const hasUserInputDate =
+      typeof checkInDate === "string" &&
+      typeof checkOutDate === "string" &&
+      checkInDate.trim() !== "" &&
+      checkOutDate.trim() !== "";
+
+    const result = await searchAccommodations({
+      keyword: typeof keyword === "string" ? keyword : undefined,
+      city: typeof city === "string" ? city : undefined,
+      boundingBox: boundingBox ? JSON.parse(boundingBox as string) : undefined,
+      checkInDate: hasUserInputDate ? (checkInDate as string) : undefined,
+      checkOutDate: hasUserInputDate ? (checkOutDate as string) : undefined,
+      guestCount: guestCount ? parseInt(guestCount as string) : undefined,
+      sort: sort as any,
+      cursor: cursor as string,
+      limit: limit ? parseInt(limit as string) : 10,
+      hasUserInputDate,
+    });
+
+    res.json(result);
   } catch (error) {
     next(error);
   }

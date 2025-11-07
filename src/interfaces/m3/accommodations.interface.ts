@@ -32,3 +32,24 @@ export interface AccommodationListDTO {
 }
 
 export type SortType = "popular" | "highRated";
+
+// 搜尋結果列表用
+export interface BoundingBox {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+}
+
+export interface SearchParams {
+  keyword?: string;
+  city?: string;
+  boundingBox?: BoundingBox;
+  checkInDate?: string;
+  checkOutDate?: string;
+  guestCount?: number;
+  sort?: SortType;
+  cursor?: string;
+  limit?: number;
+  hasUserInputDate: boolean;
+}

@@ -2,6 +2,7 @@ import { prisma } from "../../utils/prisma-pagination";
 import type {
   AccommodationDTO,
   AccommodationListDTO,
+  SearchParams,
   SortType,
 } from "../../interfaces/m3";
 
@@ -74,22 +75,6 @@ export const findAccommodationsList = async (
   sort?: SortType,
   limit = 20
 ): Promise<AccommodationListDTO[]> => {
-  const test = await (prisma.accommodation as any)
-    .paginate({
-      include: {
-        City: true,
-        accommodationType: true,
-        Images: true,
-        Contacts: true,
-        Amenities: true,
-        RoomTypes: true,
-        Reviews: true,
-      },
-    })
-    .withCursor({
-      limit: 5,
-    });
-  console.log(test);
   const accommodations = await prisma.accommodation.findMany({
     include: {
       City: true,
@@ -133,4 +118,130 @@ export const findAccommodationsList = async (
   }
 
   return result.slice(0, limit);
+};
+
+// 搜尋結果列表用
+export const searchAccommodations = async ({
+  keyword,
+  city,
+  boundingBox,
+  checkInDate,
+  checkOutDate,
+  guestCount,
+  sort,
+  cursor,
+  limit = 10,
+  hasUserInputDate,
+}: SearchParams) => {
+  const today = new Date();
+  const defaultCheckIn = new Date(today);
+  const defaultCheckOut = new Date(today);
+  defaultCheckOut.setDate(today.getDate() + 1);
+
+  checkInDate = checkInDate ?? defaultCheckIn.toISOString().slice(0, 10);
+  checkOutDate = checkOutDate ?? defaultCheckOut.toISOString().slice(0, 10);
+  guestCount = guestCount ?? 1;
+
+  const where: any = {};
+
+  if (boundingBox) {
+    where.latitude = { gte: boundingBox.minLat, lte: boundingBox.maxLat };
+    where.longitude = { gte: boundingBox.minLng, lte: boundingBox.maxLng };
+  } else if (city) {
+    where.City = { name: city };
+  }
+
+  if (keyword) {
+    where.name = { contains: keyword };
+  }
+
+  if (hasUserInputDate) {
+    where.RoomTypes = {
+      some: {
+        maxCapacity: { gte: guestCount },
+        Inventories: {
+          some: {
+            date: {
+              gte: new Date(checkInDate),
+              lt: new Date(checkOutDate),
+            },
+            availableCount: { gt: 0 },
+          },
+        },
+      },
+    };
+  }
+
+  // 防呆：groupBy fallback
+  const [ratings = [], favorites = []] = await Promise.all([
+    prisma.review
+      .groupBy({
+        by: ["accommodationId"],
+        _avg: { ratingScore: true },
+      })
+      .catch(() => []),
+    prisma.favoriteAccommodation
+      .groupBy({
+        by: ["accommodationId"],
+        _count: { accommodationId: true },
+      })
+      .catch(() => []),
+  ]);
+
+  const ratingMap = new Map(
+    ratings.map((r) => [r.accommodationId, r._avg.ratingScore])
+  );
+  const favoriteMap = new Map(
+    favorites.map((f) => [f.accommodationId, f._count.accommodationId])
+  );
+
+  const [data, meta] = await (prisma.accommodation as any)
+    .paginate({
+      where,
+      include: {
+        City: true,
+        accommodationType: true,
+        Images: true,
+        Contacts: true,
+        Amenities: true,
+        RoomTypes: true,
+      },
+      orderBy:
+        sort === "popular"
+          ? { Favorites: { _count: "desc" } }
+          : sort === "highRated"
+          ? { Reviews: { _avg: { ratingScore: "desc" } } }
+          : { id: "desc" },
+    })
+    .withCursor({
+      limit,
+      cursor,
+    })
+    .catch(() => [[], {}]);
+
+  const safeData = Array.isArray(data) ? data : [];
+
+  const safeMeta = meta ?? {
+    hasNextPage: false,
+    hasPreviousPage: false,
+    startCursor: null,
+    endCursor: null,
+  };
+
+  return {
+    data: safeData.map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      city: a.City?.name ?? "",
+      mainImage:
+        (a.Images?.find((img: any) => img.isPrimary)?.url ||
+          a.Images?.[0]?.url) ??
+        "",
+      averageRating: ratingMap.get(a.id) ?? null,
+      countFavorite: favoriteMap.get(a.id) ?? 0,
+      latitude: a.latitude ?? null,
+      longitude: a.longitude ?? null,
+    })),
+    meta: safeMeta,
+  };
 };
