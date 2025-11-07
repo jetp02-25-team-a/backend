@@ -7,7 +7,6 @@ import {
 } from "../services/placeSelect";
 import commentsRouter from "./place-comment";
 import rankRouter from "./place-ranks";
-import { computeRatingInfo } from "../utils/rating";
 
 const router = Router();
 
