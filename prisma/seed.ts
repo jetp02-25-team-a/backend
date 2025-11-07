@@ -651,6 +651,46 @@ async function seedBookingsAndReviews() {
   console.log(`✅ ${NUM_BOOKINGS} 筆 Booking 和相關 Review 資料填充完成。`);
 }
 
+/** 9. 填充 FavoriteAccommodation */
+export async function seedFavorites() {
+  console.log("--- 正在填充 FavoriteAccommodation (隨機收藏) ---");
+
+  // 取得所有使用者與住宿 ID
+  const users = await prisma.user.findMany({ select: { id: true } });
+  const accommodations = await prisma.accommodation.findMany({
+    select: { id: true },
+  });
+
+  const favorites: { userId: number; accommodationId: number }[] = [];
+
+  for (const accommodation of accommodations) {
+    const maxFavorites = Math.floor(Math.random() * 5) + 1; // 每筆住宿最多被 1~5 人收藏
+    const sampledUsers = getRandomSubset(users, maxFavorites);
+
+    for (const user of sampledUsers) {
+      favorites.push({
+        userId: user.id,
+        accommodationId: accommodation.id,
+      });
+    }
+  }
+
+  // 批量插入收藏資料
+  await prisma.favoriteAccommodation.createMany({
+    data: favorites,
+    skipDuplicates: true, // 避免重複 user-accommodation 組合
+  });
+
+  console.log(
+    `✅ 已建立 ${favorites.length} 筆 FavoriteAccommodation 收藏資料`
+  );
+}
+
+// 工具函式：隨機抽取陣列中的 N 筆資料
+function getRandomSubset<T>(array: T[], count: number): T[] {
+  return [...array].sort(() => 0.5 - Math.random()).slice(0, count);
+}
+
 // -----------------------------------------------------------
 // Ⅴ. 主執行函數
 // -----------------------------------------------------------
