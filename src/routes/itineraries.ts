@@ -192,6 +192,9 @@ router.get("/itinerary-list", async (req: Request, res: Response) => {
                 content: true,
                 updatedAt: true,
               },
+              orderBy: {
+                updatedAt: "desc",
+              },
             },
             Article: {
               select: {
@@ -543,7 +546,7 @@ router.get("/itineraries/:id", async (req: Request, res: Response) => {
 });
 
 //行程第三方人的留言功能
-router.post("/itineraries-comment", async (req: Request, res: Response) => {
+router.post("/create-comment", async (req: Request, res: Response) => {
   const { content, itineraryId, senderId } = req.body;
   try {
     await prisma.itineraryComment.create({
