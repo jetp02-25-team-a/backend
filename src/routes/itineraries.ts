@@ -507,6 +507,7 @@ router.get("/area", async (req: Request, res: Response) => {
           },
         },
         Images: {
+          take: 1,
           select: {
             itineraryId: true,
             imageName: true,

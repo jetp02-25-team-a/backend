@@ -37,11 +37,18 @@ router.get("/", async (req: Request, res: Response) => {
         userId: payload.user_id,
       },
       select: {
-        friendId: true,
-        createdAt: true,
+        User: {
+          select: {
+            id: true,
+            avatar: true,
+            nickname: true,
+          },
+        },
       },
     });
-    return res.status(200).json({ success: true, data: data });
+    //攤平
+    const users = data.map((f) => f.User);
+    return res.status(200).json({ success: true, data: users });
   } catch (err) {
     console.log(err);
   }
