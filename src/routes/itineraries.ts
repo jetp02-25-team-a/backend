@@ -35,12 +35,13 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
         figure: figure,
       },
     });
+
     //2.建立每日行程
     const start = moment.tz(startDay, "Asia/Taipei"); //2025-11-10",轉亞洲本地端
     const end = moment.tz(endDay, "Asia/Taipei");
     const totalDays = end.diff(start, "days"); //取得行程天數
 
-    await Promise.all(
+    const result = await Promise.all(
       Array.from({ length: totalDays }).map((_, i) => {
         const dayDate = start.clone().add(i, "days").startOf("day"); //moment 轉 datetime 本地 UTC
         const dayStartTime = moment(
@@ -60,11 +61,14 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
     );
 
     //3.回傳訊息
-    res.status(200).json({
-      success: true,
-      message: "行程建立完成",
-      itineraryId: itinerary.id,
-    });
+    if (result) {
+      console.log("is send");
+      res.status(200).json({
+        success: true,
+        message: "行程建立完成",
+        itineraryId: itinerary.id,
+      });
+    }
   } catch (err) {
     console.log(err);
   }
@@ -144,7 +148,7 @@ router.get("/detail", async (req: Request, res: Response) => {
 //輸入行程id取得該行程的天數和天數下的所有nodes和node 下面的googlePlace資訊 id:22 包含持有者user資料
 router.get("/itinerary-list", async (req: Request, res: Response) => {
   const { itineraryId, userId } = req.query;
-  // console.log("itineraryId====>", itineraryId);
+
   if (!itineraryId || !userId) return;
   try {
     const result = await prisma.user.findMany({
@@ -238,7 +242,6 @@ router.get("/search", async (req: Request, res: Response) => {
             where: { placeId: place.place_id },
           });
           if (exist) return exist;
-          // console.log("exist????", exist);
           //不存在執行創建
           return await prisma.googleMapPlace.create({
             data: {
@@ -308,8 +311,6 @@ interface Itinerary {
 router.post("/save", async (req: Request, res: Response) => {
   try {
     const { itineraryData: newItinerary } = req.body;
-    console.log(newItinerary);
-    // console.log("==>", newItinerary[1].Nodes);
 
     //抓 itineraryId
     const itineraryId = newItinerary[0]?.itineraryId;
@@ -371,7 +372,6 @@ router.post("/save", async (req: Request, res: Response) => {
           },
         });
         const newNodes = nodes.filter((n: any, i: number) => {
-          console.log("ru!!!", exsitNodes.length);
           if (exsitNodes.length === 0) {
             return true;
           } else {
@@ -486,7 +486,6 @@ router.post("/save", async (req: Request, res: Response) => {
 //取得所有行程(依照地區)
 router.get("/area", async (req: Request, res: Response) => {
   const { area } = req.query;
-  console.log("area:", area);
   if (!area) return;
   try {
     const allItinerary = await prisma.itinerary.findMany({

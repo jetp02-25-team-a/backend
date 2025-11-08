@@ -27,7 +27,7 @@ export const chatSocket = (io: Server) => {
     // console.log("目前使用者 session:", session?.id);
 
     // 接收訊息
-    socket.on("chat", async (msg) => {
+    socket.on("chat", async (msg, callback) => {
       //收到訊息: { providerId: 4, acceptId: 7, content: 'wwwww' }
       try {
         //房間處理
@@ -51,11 +51,19 @@ export const chatSocket = (io: Server) => {
             },
           });
         }
-      } catch (err) {
-        console.log(err);
-      }
+        // }
+        // catch (err) {
+        //   console.log(err);
+        // }
 
-      io.emit("public", msg); // 廣播給所有連線者
+        io.emit("public", msg); // 廣播給所有連線者
+
+        //  回傳成功訊息給前端 (這會觸發前端的 callback)
+        if (callback) callback({ success: true, message: "訊息已送出" });
+      } catch (err) {
+        console.error("訊息儲存失敗:", err);
+        if (callback) callback({ success: false, message: "伺服器錯誤" });
+      }
     });
 
     // 使用者離線
