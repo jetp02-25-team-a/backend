@@ -88,7 +88,12 @@ router.get("/allmessage", async (req: Request, res: Response) => {
               { senderId: f.friendId, receiverId: payload.user_id },
             ],
           },
-          select: { content: true },
+          select: {
+            content: true,
+            isRead: true,
+            senderId: true,
+            receiverId: true,
+          },
           orderBy: {
             createdAt: "desc", //搭配findFirst ＝ 找到最新
           },
