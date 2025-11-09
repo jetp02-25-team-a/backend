@@ -589,4 +589,21 @@ router.post("/upload-pictures", (req: Request, res: Response) => {
   }
 });
 
+//上傳團體行程內容
+router.post("/create-article", async (req: Request, res: Response) => {
+  const { itineraryId, title, content } = req.body;
+  try {
+    const result = await prisma.article.create({
+      data: {
+        itineraryId: itineraryId,
+        title: title,
+        content: content,
+      },
+    });
+    if (result) res.status(200).json({ success: true, message: "上傳成功" });
+  } catch (err) {
+    console.log(err);
+  }
+});
+
 export default router;
