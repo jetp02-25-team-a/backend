@@ -11,6 +11,7 @@ router.get("/", async (req, res) => {
   const Query = z.object({
     address: z.string().optional(),
     region: z.string().optional(),
+    type: z.enum(["food", "spot"]).optional(), // ✅ 新增 type
     limit: z.coerce.number().int().min(1).max(100).default(20),
     offset: z.coerce.number().int().min(0).default(0),
   });
@@ -24,14 +25,14 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ success: false, error: errors });
   }
 
-  const { address, region, limit, offset } = parsed.data;
+  const { type, address, region, limit, offset } = parsed.data;
   // 三者都沒給時提示錯誤
   if (!address && !region) {
     return res
       .status(400)
       .json({ success: false, message: "請至少輸入 address 或 region" });
   }
-  const rows = await searchPlaces(address, region, limit, offset);
+  const rows = await searchPlaces(type, address, region, offset);
   res.json({ success: true, data: rows, pagination: { limit, offset } });
 });
 
