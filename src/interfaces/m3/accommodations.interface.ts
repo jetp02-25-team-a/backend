@@ -34,6 +34,8 @@ export interface AccommodationListDTO {
 export type SortType = "popular" | "highRated";
 
 // 搜尋結果列表用
+export type SortDirection = "desc" | "asc";
+
 export interface BoundingBox {
   minLat: number;
   maxLat: number;
@@ -49,7 +51,15 @@ export interface SearchParams {
   checkOutDate?: string;
   guestCount?: number;
   sort?: SortType;
+  direction?: SortDirection;
   cursor?: string;
   limit?: number;
   hasUserInputDate: boolean;
+
+  // 篩選條件
+  accommodationAmenities?: string[]; // 住宿設施
+  roomTypeAmenities?: string[]; // 房型設施
+  favorites?: boolean;
+  userId?: number;
+  favoriteIds?: number[];
 }

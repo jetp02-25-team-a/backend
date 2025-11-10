@@ -71,8 +71,13 @@ export const getAccommodationSearch = async (
       checkOutDate,
       guestCount,
       sort,
+      direction,
       cursor,
       limit,
+      accommodationAmenities,
+      roomTypeAmenities,
+      favorites,
+      userId,
     } = req.query;
 
     const hasUserInputDate =
@@ -82,16 +87,25 @@ export const getAccommodationSearch = async (
       checkOutDate.trim() !== "";
 
     const result = await searchAccommodations({
-      keyword: typeof keyword === "string" ? keyword : undefined,
-      city: typeof city === "string" ? city : undefined,
+      keyword: keyword as string,
+      city: city as string,
       boundingBox: boundingBox ? JSON.parse(boundingBox as string) : undefined,
       checkInDate: hasUserInputDate ? (checkInDate as string) : undefined,
       checkOutDate: hasUserInputDate ? (checkOutDate as string) : undefined,
       guestCount: guestCount ? parseInt(guestCount as string) : undefined,
       sort: sort as any,
+      direction: (direction as "asc" | "desc") ?? "desc",
       cursor: cursor as string,
       limit: limit ? parseInt(limit as string) : 10,
       hasUserInputDate,
+      accommodationAmenities: accommodationAmenities
+        ? (accommodationAmenities as string).split(",")
+        : undefined,
+      roomTypeAmenities: roomTypeAmenities
+        ? (roomTypeAmenities as string).split(",")
+        : undefined,
+      favorites: favorites === "true",
+      userId: userId ? parseInt(userId as string, 10) : undefined,
     });
 
     res.json(result);

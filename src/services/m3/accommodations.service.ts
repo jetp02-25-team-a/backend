@@ -5,6 +5,13 @@ import type {
   SearchParams,
   SortType,
 } from "../../interfaces/m3";
+import {
+  attachAggregates,
+  buildAccommodationWhere,
+  buildOrderBy,
+  mapToCardDTO,
+} from "../../utils/m3";
+import type { AccommodationImage } from "../../generated/prisma";
 
 export const findAllAccommodations = async (filters: {
   city?: string;
@@ -82,34 +89,22 @@ export const findAccommodationsList = async (
     },
   });
 
-  const ratings = await prisma.review.groupBy({
-    by: ["accommodationId"],
-    _avg: { ratingScore: true },
-  });
+  const enriched = await attachAggregates(accommodations);
 
-  const ratingMap = new Map(
-    ratings.map((r) => [r.accommodationId, r._avg.ratingScore])
-  );
+  // const result = enriched.map((a) => ({
+  //   id: a.id,
+  //   name: a.name,
+  //   city: a.City?.name,
+  //   mainImage:
+  //     a.Images?.find((img: AccommodationImage) => img.isPrimary)?.url ||
+  //     a.Images?.[0]?.url,
+  //   averageRating: a.averageRating,
+  //   latitude: a.latitude ?? null,
+  //   longitude: a.longitude ?? null,
+  //   countFavorite: a.countFavorite ?? 0,
+  // }));
 
-  const favorites = await prisma.favoriteAccommodation.groupBy({
-    by: ["accommodationId"],
-    _count: { accommodationId: true },
-  });
-
-  const favoriteMap = new Map(
-    favorites.map((f) => [f.accommodationId, f._count.accommodationId])
-  );
-
-  const result = accommodations.map((a) => ({
-    id: a.id,
-    name: a.name,
-    city: a.City.name,
-    mainImage: a.Images.find((img) => img.isPrimary)?.url || a.Images[0]?.url,
-    averageRating: ratingMap.get(a.id) ?? null,
-    latitude: a.latitude ?? null,
-    longitude: a.longitude ?? null,
-    countFavorite: favoriteMap.get(a.id) ?? 0,
-  }));
+  const result = mapToCardDTO(enriched);
 
   if (sort === "popular") {
     result.sort((a, b) => b.countFavorite - a.countFavorite);
@@ -121,79 +116,18 @@ export const findAccommodationsList = async (
 };
 
 // 搜尋結果列表用
-export const searchAccommodations = async ({
-  keyword,
-  city,
-  boundingBox,
-  checkInDate,
-  checkOutDate,
-  guestCount,
-  sort,
-  cursor,
-  limit = 10,
-  hasUserInputDate,
-}: SearchParams) => {
-  const today = new Date();
-  const defaultCheckIn = new Date(today);
-  const defaultCheckOut = new Date(today);
-  defaultCheckOut.setDate(today.getDate() + 1);
-
-  checkInDate = checkInDate ?? defaultCheckIn.toISOString().slice(0, 10);
-  checkOutDate = checkOutDate ?? defaultCheckOut.toISOString().slice(0, 10);
-  guestCount = guestCount ?? 1;
-
-  const where: any = {};
-
-  if (boundingBox) {
-    where.latitude = { gte: boundingBox.minLat, lte: boundingBox.maxLat };
-    where.longitude = { gte: boundingBox.minLng, lte: boundingBox.maxLng };
-  } else if (city) {
-    where.City = { name: city };
+export async function searchAccommodations(params: SearchParams) {
+  if (params.favorites && params.userId) {
+    const favs = await prisma.favoriteAccommodation.findMany({
+      where: { userId: params.userId },
+      select: { accommodationId: true },
+    });
+    params.favoriteIds = favs.map((f) => f.accommodationId);
   }
 
-  if (keyword) {
-    where.name = { contains: keyword };
-  }
+  const where = buildAccommodationWhere(params);
 
-  if (hasUserInputDate) {
-    where.RoomTypes = {
-      some: {
-        maxCapacity: { gte: guestCount },
-        Inventories: {
-          some: {
-            date: {
-              gte: new Date(checkInDate),
-              lt: new Date(checkOutDate),
-            },
-            availableCount: { gt: 0 },
-          },
-        },
-      },
-    };
-  }
-
-  // 防呆：groupBy fallback
-  const [ratings = [], favorites = []] = await Promise.all([
-    prisma.review
-      .groupBy({
-        by: ["accommodationId"],
-        _avg: { ratingScore: true },
-      })
-      .catch(() => []),
-    prisma.favoriteAccommodation
-      .groupBy({
-        by: ["accommodationId"],
-        _count: { accommodationId: true },
-      })
-      .catch(() => []),
-  ]);
-
-  const ratingMap = new Map(
-    ratings.map((r) => [r.accommodationId, r._avg.ratingScore])
-  );
-  const favoriteMap = new Map(
-    favorites.map((f) => [f.accommodationId, f._count.accommodationId])
-  );
+  console.log("where: ", where);
 
   const [data, meta] = await (prisma.accommodation as any)
     .paginate({
@@ -206,21 +140,12 @@ export const searchAccommodations = async ({
         Amenities: true,
         RoomTypes: true,
       },
-      orderBy:
-        sort === "popular"
-          ? { Favorites: { _count: "desc" } }
-          : sort === "highRated"
-          ? { Reviews: { _avg: { ratingScore: "desc" } } }
-          : { id: "desc" },
+      orderBy: buildOrderBy(params.sort, params.direction),
     })
-    .withCursor({
-      limit,
-      cursor,
-    })
+    .withCursor({ limit: params.limit, cursor: params.cursor })
     .catch(() => [[], {}]);
 
   const safeData = Array.isArray(data) ? data : [];
-
   const safeMeta = meta ?? {
     hasNextPage: false,
     hasPreviousPage: false,
@@ -228,20 +153,8 @@ export const searchAccommodations = async ({
     endCursor: null,
   };
 
-  return {
-    data: safeData.map((a: any) => ({
-      id: a.id,
-      name: a.name,
-      city: a.City?.name ?? "",
-      mainImage:
-        (a.Images?.find((img: any) => img.isPrimary)?.url ||
-          a.Images?.[0]?.url) ??
-        "",
-      averageRating: ratingMap.get(a.id) ?? null,
-      countFavorite: favoriteMap.get(a.id) ?? 0,
-      latitude: a.latitude ?? null,
-      longitude: a.longitude ?? null,
-    })),
-    meta: safeMeta,
-  };
-};
+  const enriched = await attachAggregates(safeData);
+  const result = mapToCardDTO(enriched);
+
+  return { data: result, meta: safeMeta };
+}
