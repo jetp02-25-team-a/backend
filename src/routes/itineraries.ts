@@ -4,6 +4,11 @@ import { json, object, success, tuple } from "zod";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { prisma } from "../utils/prisma-pagination";
 import moment from "moment-timezone";
+import { tr } from "zod/v4/locales";
+import multer from "multer";
+import path from "path";
+import { fileURLToPath } from "url";
+import { v4 as uuidv4 } from "uuid";
 //<= 路徑
 const router = express.Router();
 
@@ -39,11 +44,13 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
     //2.建立每日行程
     const start = moment.tz(startDay, "Asia/Taipei"); //2025-11-10",轉亞洲本地端
     const end = moment.tz(endDay, "Asia/Taipei");
-    const totalDays = end.diff(start, "days"); //取得行程天數
+
+    const totalDays = end.diff(start, "days") + 1; //取得行程天數
 
     const result = await Promise.all(
       Array.from({ length: totalDays }).map((_, i) => {
-        const dayDate = start.clone().add(i, "days").startOf("day"); //moment 轉 datetime 本地 UTC
+        // const dayDate = start.clone().add(i, "days").startOf("day"); //moment 轉 datetime 本地 UTC
+        const dayDate = start.clone().add(i, "days"); //moment 轉 datetime 本地 UTC
         const dayStartTime = moment(
           `${dayDate.format("YYYY-MM-DD")} ${startTime}`,
           "YYYY-MM-DD HH:mm"
@@ -581,14 +588,6 @@ router.put("/put-comment", (req: Request, res: Response) => {
   }
 });
 
-//上傳旅程圖片功能 還沒寫好？
-router.post("/upload-pictures", (req: Request, res: Response) => {
-  try {
-  } catch (err) {
-    console.log(err);
-  }
-});
-
 //上傳團體行程內容
 router.post("/create-article", async (req: Request, res: Response) => {
   const { itineraryId, title, content } = req.body;
@@ -605,5 +604,94 @@ router.post("/create-article", async (req: Request, res: Response) => {
     console.log(err);
   }
 });
+
+//查找有無文在該行程的文章
+router.get(
+  "/check-article/:itineraryId",
+  async (req: Request, res: Response) => {
+    const { itineraryId } = req.params;
+    try {
+      const result = await prisma.article.findFirst({
+        where: {
+          itineraryId: +itineraryId,
+        },
+        select: {
+          id: true,
+          itineraryId: true,
+        },
+      });
+      console.log("result===>", result);
+      if (result) {
+        return res.status(200).json({ success: true, message: "find" });
+      }
+      return res.status(200).json({ success: false, message: "not find" });
+    } catch (err) {}
+  }
+);
+
+// 設定上傳位置與檔名（使用 UUID）
+// 取得 __dirname（ESM 默認沒有，所以要自己做）
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// 上傳設定：存到 uploads 資料夾，檔名用 UUID
+const storage = multer.diskStorage({
+  destination: path.join(__dirname, "../../public/images/itineraries_photo"),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname); // 取得原始檔案的副檔名（例如 .jpg）
+    cb(null, uuidv4() + ext); // 使用 UUID 當新檔名，再加上原本的副檔名
+  },
+});
+
+const upload = multer({ storage });
+
+//處理圖片上傳
+router.post(
+  "/upload/:itineraryId",
+  upload.single("image"),
+  async (req, res) => {
+    const { itineraryId } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({ error: "沒有收到圖片" });
+    }
+
+    const filename = req.file.filename;
+    console.log("filename =>", filename);
+
+    // 這裡要改成「有圖片時才新增資料」
+    const result = await prisma.itineraryImage.create({
+      data: {
+        imageName: filename,
+        itineraryId: Number(itineraryId),
+      },
+    });
+
+    res.json({
+      message: "上傳成功",
+      filename,
+      url: `/uploads/${filename}`, // 前端想直接顯示這網址
+    });
+  }
+);
+//更新文章
+// router.put(
+//   "/renew-article/:itineraryId",
+//   async (req: Request, res: Response) => {
+//     const { itineraryId, title, content } = req.body;
+//     try {
+//       const result = await prisma.article.update({
+//         data: {
+//           itineraryId: itineraryId,
+//           title: title,
+//           content: content,
+//         },
+//       });
+//       if (result) res.status(200).json({ success: true, message: "上傳成功" });
+//     } catch (err) {
+//       console.log(err);
+//     }
+//   }
+// );
 
 export default router;
