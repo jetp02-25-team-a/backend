@@ -1,28 +1,34 @@
 import prisma, { paginate } from "../utils/prisma-pagination-place";
 
 /** 只依 region / address 模糊搜尋 */
-export async function searchPlaces(keyword: string, limit = 20, offset = 0) {
+export async function searchPlaces(
+  address?: string,
+  region?: string,
+  offset = 0
+) {
+  const AND: any[] = [];
+
+  if (address && address.trim()) {
+    AND.push({ address: { contains: address } });
+  }
+
+  if (region && region.trim()) {
+    AND.push({ region: { contains: region } });
+  }
+
+  if (AND.length === 0) return [];
+
   return prisma.place.findMany({
-    where: {
-      OR: [
-        { region: { contains: keyword } },
-        { address: { contains: keyword } },
-      ],
-    },
-    orderBy: { updatedAt: "desc" }, // 你也可改 id / updatedAt
-    take: limit,
+    where: { AND },
     skip: offset,
     select: {
       id: true,
-      type: true,
       name: true,
-      region: true,
+      type: true,
       address: true,
-      Photos: {
-        take: 1,
-        orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
-        select: { id: true, url: true },
-      },
+      region: true,
+      introduce: true,
+      Photos: { select: { url: true }, take: 1 },
     },
   });
 }

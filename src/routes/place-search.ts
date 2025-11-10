@@ -9,7 +9,8 @@ const router = Router();
  */
 router.get("/", async (req, res) => {
   const Query = z.object({
-    q: z.string().min(1),
+    address: z.string().optional(),
+    region: z.string().optional(),
     limit: z.coerce.number().int().min(1).max(100).default(20),
     offset: z.coerce.number().int().min(0).default(0),
   });
@@ -23,8 +24,14 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ success: false, error: errors });
   }
 
-  const { q, limit, offset } = parsed.data;
-  const rows = await searchPlaces(q, limit, offset);
+  const { address, region, limit, offset } = parsed.data;
+  // 三者都沒給時提示錯誤
+  if (!address && !region) {
+    return res
+      .status(400)
+      .json({ success: false, message: "請至少輸入 address 或 region" });
+  }
+  const rows = await searchPlaces(address, region, limit, offset);
   res.json({ success: true, data: rows, pagination: { limit, offset } });
 });
 
