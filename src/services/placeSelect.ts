@@ -1,12 +1,5 @@
 import prisma, { paginate } from "../utils/prisma-pagination-place";
 
-// export async function getReviews(placeId: number) {
-//   return prisma.review.findMany({
-//     where: { id: placeId },
-//     orderBy: { updatedAt: "desc" },
-//   });
-// }
-
 /** 單筆詳情：Place + Photos + 評分統計 + 最新留言 */
 export async function getPlaceExpanded(
   placeId: number,
@@ -104,9 +97,26 @@ export async function searchPlacesExpanded(params: {
   keyword?: string;
   limit?: number;
   offset?: number;
-  photosPerPlace?: number; // 每筆回傳幾張圖（預設 1，當縮圖）
+  photosPerPlace?: number;
+  sort?: "rank_desc" | "rank_asc";
 }) {
-  const { type, keyword, limit = 20, offset = 0, photosPerPlace = 1 } = params;
+  const {
+    type,
+    keyword,
+    limit = 20,
+    offset = 0,
+    photosPerPlace = 1,
+    sort = "rank_desc",
+  } = params;
+
+  // 依 sort 決定排序（主：平均分數；次：id）
+  const orderBy =
+    sort === "rank_asc"
+      ? [{ Ranks: { _avg: { score: "asc" as const } } }, { id: "asc" as const }]
+      : [
+          { Ranks: { _avg: { score: "desc" as const } } },
+          { id: "asc" as const },
+        ];
 
   // 先抓 Place 清單（精簡 select）
   const places = await prisma.place.findMany({
