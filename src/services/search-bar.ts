@@ -2,11 +2,16 @@ import prisma, { paginate } from "../utils/prisma-pagination-place";
 
 /** 只依 region / address 模糊搜尋 */
 export async function searchPlaces(
+  type?: string,
   address?: string,
   region?: string,
   offset = 0
 ) {
   const AND: any[] = [];
+
+  if (type && type.trim()) {
+    AND.push({ type: type.trim() });
+  }
 
   if (address && address.trim()) {
     AND.push({ address: { contains: address } });
@@ -28,6 +33,8 @@ export async function searchPlaces(
       address: true,
       region: true,
       introduce: true,
+      latitude: true,
+      longitude: true,
       Photos: { select: { url: true }, take: 1 },
     },
   });
