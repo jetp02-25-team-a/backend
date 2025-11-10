@@ -21,7 +21,7 @@ import searchRouter from "./routes/place-search";
 import articleRouter from "./routes/article.routes";
 import mallRouter from "./routes/api-mall";
 
-import { m3AccommodationsRoute } from "./routes/m3";
+import { m3AccommodationsRoute, m3Favorite } from "./routes/m3";
 
 import http from "http";
 import { Server } from "socket.io";
@@ -113,6 +113,7 @@ app.use("/api/article", articleRouter);
 
 //m3 routes
 app.use("/api/m3", m3AccommodationsRoute);
+app.use("/api/m3", m3Favorite);
 
 // ---------- 建立 HTTP + Socket.IO 伺服器 ----------
 const server = http.createServer(app);

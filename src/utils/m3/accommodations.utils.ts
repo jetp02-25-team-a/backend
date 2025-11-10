@@ -29,7 +29,10 @@ export function buildAccommodationWhere(params: SearchParams) {
   }
 
   if (params.keyword) {
-    where.name = { contains: params.keyword };
+    where.OR = [
+      { name: { contains: params.keyword } },
+      { City: { name: { contains: normalizeTai(params.keyword || "") } } },
+    ];
   }
 
   if (params.hasUserInputDate) {
@@ -84,11 +87,17 @@ export function buildOrderBy(
 ) {
   switch (sort) {
     case "popular":
-      return { Favorites: { _count: direction } };
+      return [
+        { Favorites: { _count: direction } },
+        { id: direction }, // 保證唯一
+      ];
     case "highRated":
-      return { Reviews: { _avg: { ratingScore: direction } } };
+      return [
+        { Reviews: { _avg: { ratingScore: direction } } },
+        { id: direction }, // 保證唯一
+      ];
     default:
-      return { id: direction };
+      return [{ id: direction }];
   }
 }
 

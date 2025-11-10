@@ -142,7 +142,7 @@ export async function searchAccommodations(params: SearchParams) {
       },
       orderBy: buildOrderBy(params.sort, params.direction),
     })
-    .withCursor({ limit: params.limit, cursor: params.cursor })
+    .withCursor({ limit: params.limit, after: params.cursor })
     .catch(() => [[], {}]);
 
   const safeData = Array.isArray(data) ? data : [];
