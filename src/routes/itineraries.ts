@@ -163,6 +163,7 @@ router.get("/itinerary-list", async (req: Request, res: Response) => {
         id: +userId,
       },
       select: {
+        id: true,
         fullName: true,
         nickname: true,
         Itineraries: {
@@ -693,10 +694,81 @@ router.post("/invite", async (req: Request, res: Response) => {
   }
 });
 
-//更新旅程邀約
-router.put("/invite", async (req: Request, res: Response) => {
-  const { invitationId, userId, invitationResponse } = req.body;
+// 查詢自己所有接收到的行程邀約
+router.get("/all-invite/:userId", async (req: Request, res: Response) => {
+  const { userId } = req.params;
+  console.log("進入 all-invite");
+  try {
+    // const result = await prisma.itineraryInvitation.findMany({
+    //   where: {
+    //     receiverId: +userId,
+    //     senderId: +userId,
+    //     status: 0,
+    //   },
+    //   include: {
+    //     itinerary: {
+    //       select: {
+    //         userId: true,
+    //         title: true,
+    //       },
+    //     },
+    //     sender: {
+    //       select: {
+    //         id: true,
+    //         nickname: true,
+    //         fullName: true,
+    //         avatar: true,
+    //       },
+    //     },
+    //   },
+    // });
+    const received = await prisma.itineraryInvitation.findMany({
+      where: {
+        receiverId: +userId,
+        status: 0,
+      },
+      include: {
+        itinerary: {
+          select: { userId: true, title: true },
+        },
+        sender: {
+          select: { id: true, nickname: true, fullName: true, avatar: true },
+        },
+      },
+    });
 
+    const sent = await prisma.itineraryInvitation.findMany({
+      where: {
+        senderId: +userId,
+        status: 0,
+      },
+      include: {
+        itinerary: {
+          select: { userId: true, title: true },
+        },
+        receiver: {
+          select: { id: true, nickname: true, fullName: true, avatar: true },
+        },
+      },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        received,
+        sent,
+      },
+      // received, // 收到的邀請
+      // sent, // 送出的邀請
+    });
+    // res.status(200).json({ success: true, data: result });
+  } catch (err) {}
+});
+
+//更新旅程邀約
+router.patch("/invite", async (req: Request, res: Response) => {
+  const { invitationId, userId, invitationResponse } = req.body;
+  console.log("xxxx=>", { invitationId, userId, invitationResponse });
   try {
     //1.先修改invitation的資料
     const result = await prisma.itineraryInvitation.update({
@@ -707,11 +779,12 @@ router.put("/invite", async (req: Request, res: Response) => {
         status: invitationResponse,
       },
     });
+
     if (!result) return;
     //2.如果接收 將該使用者加入 user_itinerars 中
     //0 pending 1 accpet 2 reject
     if (invitationResponse === 1) {
-      prisma.userItinerary.create({
+      await prisma.userItinerary.create({
         data: {
           userId: userId,
           itineraryId: result.itineraryId,
