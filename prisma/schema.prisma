@@ -275,7 +275,7 @@ model ExpenseType {
 //記帳內容
 model Expense {
   id          Int      @id @default(autoincrement()) @map("expense_id")
-  TripPlanId  Int      @map("trip_plan_id") // 對應 UserTripPlan.id，型別改為 Int
+  tripPlanId  Int      @map("trip_plan_id") // 對應 UserTripPlan.id，型別改為 Int
   userId      Int      @map("user_id")
   title       String
   amount      Float //Double
@@ -286,7 +286,7 @@ model Expense {
   isChecked   Boolean  @default(false) @map("is_checked") //for刪除給API使用 
 
   User     User         @relation(fields: [userId], references: [id])
-  TripPlan TripPlan?    @relation(fields: [TripPlanId], references: [id])
+  TripPlan TripPlan?    @relation(fields: [tripPlanId], references: [id])
   Type     ExpenseType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
 
   @@map("expenses")
