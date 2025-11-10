@@ -975,9 +975,10 @@ model ProductPic {
 
 //訂單主表
 model Order {
-  id         Int @id @default(autoincrement()) @map("order_id")
-  userId     Int @map("user_id")
-  orderTotal Int @map("order_total")
+  id         Int    @id @default(autoincrement()) @map("order_id")
+  userId     Int    @map("user_id")
+  orderTotal Int    @map("order_total")
+  tradeId    String @map("trade_id")
 
   User User @relation(fields: [userId], references: [id])
 
