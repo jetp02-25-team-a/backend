@@ -5,8 +5,57 @@ import type { Request, Response } from "express";
  import express from "express";
 import upload from "../utils/upload-images.js";
 import { prisma } from "../utils/prisma-pagination.js";
+import { updateArticle } from "../controller/article.controller.js";
 
 const router = express.Router();
+
+//*UPDATEARTICLE
+// const router = express.Router();
+
+// PUT /article/:id → edit artikel berdasarkan ID
+// router.put("/:id", upload.single("photos"), updateArticle);
+
+// router.put("/", upload.array("photo"), updateArticle async (req: Request, res: Response) => {
+//   try {
+//     const { title, content, userId, locationId } = req.body;
+
+//     // 🔍 Validasi minimal
+//     if (!title || !userId || !locationId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "title, userId, dan locationId wajib diisi",
+//       });
+//     }
+router.put("/:id", upload.array("photo"), async (req: Request, res: Response) => {
+  const { title, content, userId, locationId } = req.body;
+
+  if (!title || !userId || !locationId) {
+    return res.status(400).json({
+      success: false,
+      message: "title, userId, dan locationId wajib diisi",
+    });
+  }
+
+  try {
+    // ... logika update artikel
+  } catch (error) {
+    console.error("❌ Error updating article:", error);
+    return res.status(500).json({ message: "Failed to update article" });
+  }
+});
+
+
+
+
+
+
+// export default router;
+
+
+
+
+
+
 
 /**
  * ============================
@@ -163,7 +212,249 @@ export default router;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// // File: routes/article.route.ts
+
+
 // import type { Request, Response } from "express";
+//  import express from "express";
+// import upload from "../utils/upload-images.js";
+// import { prisma } from "../utils/prisma-pagination.js";
+
+// const router = express.Router();
+
+// /**
+//  * ============================
+//  * POST /article
+//  * make new article + upload foto
+//  * ============================
+//  */
+// router.post("/", upload.array("photo"), async (req: Request, res: Response) => {
+//   try {
+//     const { title, content, userId, locationId } = req.body;
+
+//     // 🔍 Validasi minimal
+//     if (!title || !userId || !locationId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "title, userId, dan locationId wajib diisi",
+//       });
+//     }
+
+//     // 🔗 prepare data photo jika ada
+//     const photos =
+//       (req.files as Express.Multer.File[] | undefined)?.map((f) => ({
+//         url: `/images/${f.filename}`,
+//       })) || [];
+
+//     // 🧩 save to database
+//     const newPost = await prisma.post.create({
+//       data: {
+//         title,
+//         content,
+//         User: { connect: { id: parseInt(userId) } },
+//         Location: { connect: { id: parseInt(locationId) } },
+//         Photos: { createMany: { data: photos } },
+//       },
+//       include: {
+//         Location: true,
+//         Photos: true,
+//       },
+//     });
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Post created successfully",
+//       post: {
+//         id: newPost.id,
+//         title: newPost.title,
+//         location: newPost.Location?.city || "未知地點",
+//         imgUrl: newPost.Photos?.[0]?.url || "",
+//       },
+//     });
+//   } catch (error) {
+//     console.error("❌ Error creating post:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to save post",
+//     });
+//   }
+// });
+
+// /**
+//  * ============================
+//  * GET /article
+//  * take all article
+//  * ============================
+//  */
+// router.get("/", async (_req: Request, res: Response) => {
+//   try {
+//     const posts = await prisma.post.findMany({
+//       include: {
+//         User: true,
+//         Location: true,
+//         Photos: true,
+//         Likes: true,
+//       },
+//       orderBy: { id: "desc" },
+//     });
+
+//     // 🔒 Pastikan semua properti aman
+//     const cards = posts.map((post) => ({
+//       id: post.id,
+//       title: post.title,
+//       location: post.Location?.id || "未知地點",
+//       imgUrl: post.Photos?.[0]?.url || "",
+//     }));
+
+//     return res.json(cards);
+//   } catch (error) {
+//     console.error("❌ Error fetching posts:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to retrieve posts",
+//     });
+//   }
+// });
+
+// /**
+//  * ============================
+//  * GET /article/:id
+//  * Ambil artikel berdasarkan ID
+//  * ============================
+//  */
+// router.get("/:id", async (req: Request, res: Response) => {
+//   const { id } = req.params;
+
+//   if (!id || isNaN(parseInt(id))) {
+//     return res.status(400).json({ message: "Invalid post ID" });
+//   }
+
+//   try {
+//     const post = await prisma.post.findUnique({
+//       where: { id: parseInt(id) },
+//       include: {
+//         User: true,
+//         Location: true,
+//         Photos: true,
+//         Likes: true,
+//       },
+//     });
+
+//     if (!post) {
+//       return res.status(404).json({ message: "Post not found" });
+//     }
+
+//     // 💡 Format respons agar frontend langsung bisa pakai
+//     const formattedPost = {
+//       id: post.id,
+//       title: post.title,
+//       content: post.content,
+//       author: post.User?.userid || "未知作者",
+//       location: post.Location?.city || "未知地點",
+//       photos: post.Photos?.map((p) => p.url) || [],
+//       likesCount: post.Likes?.length || 0,
+//     };
+
+//     return res.json(formattedPost);
+//   } catch (error) {
+//     console.error("❌ Error retrieving post:", error);
+//     return res.status(500).json({ message: "Error retrieving post" });
+//   }
+// });
+
+// export default router;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/// import type { Request, Response } from "express";
 // import express from "express";
 // // import express, { Request, Response } from 'express'
 // import upload from "../utils/upload-images";
