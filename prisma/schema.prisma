@@ -75,6 +75,10 @@ model User {
   PointsLogs PointsLog[]
   LoginLogs  LoginLog[]
 
+  //旅行邀約
+  sentInvitations     ItineraryInvitation[] @relation("InvitationSender")
+  receivedInvitations ItineraryInvitation[] @relation("InvitationReceiver")
+
   @@map("users")
 }
 
@@ -820,11 +824,12 @@ model Itinerary {
 
   User User @relation(fields: [userId], references: [id])
 
-  Days              ItineraryDay[]
-  Images            ItineraryImage[]
-  UserLinked        UserItinerary[]
-  ItineraryComments ItineraryComment[]
-  Article           Article?
+  Days                 ItineraryDay[]
+  Images               ItineraryImage[]
+  UserLinked           UserItinerary[]
+  ItineraryComments    ItineraryComment[]
+  Article              Article?
+  itineraryInvitations ItineraryInvitation[]
 
   @@map("itineraries")
 }
@@ -927,6 +932,24 @@ model Article {
   Itinerary Itinerary @relation(fields: [itineraryId], references: [id])
 
   @@map("articles")
+}
+
+// ----------------- ItineraryInvitation  -----------------
+model ItineraryInvitation {
+  id          Int      @id @default(autoincrement())
+  itineraryId Int      @map("itinerary_id")
+  senderId    Int      @map("sender_id")
+  receiverId  Int      @map("receiver_id")
+  status      Int      @default(0) // 0: pending, 1: accepted, 2: rejected
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 關聯（假設有 User 與 Itinerary 表）
+  itinerary Itinerary @relation(fields: [itineraryId], references: [id])
+  sender    User      @relation("InvitationSender", fields: [senderId], references: [id])
+  receiver  User      @relation("InvitationReceiver", fields: [receiverId], references: [id])
+
+  @@map("itinerary_invitation")
 }
 
 // ----------------------------------------------------------------------

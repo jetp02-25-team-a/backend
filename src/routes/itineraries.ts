@@ -674,6 +674,57 @@ router.post(
     });
   }
 );
+
+//發送旅程邀約
+router.post("/invite", async (req: Request, res: Response) => {
+  const { itineraryId, senderId, receiverId } = req.body;
+  try {
+    const result = await prisma.itineraryInvitation.create({
+      data: {
+        itineraryId: itineraryId,
+        senderId: senderId,
+        receiverId: receiverId,
+        status: 0, //0 => pending
+      },
+    });
+    res.status(200).json({ suceess: true, message: "已發送邀請" });
+  } catch (err) {
+    console.log(err);
+  }
+});
+
+//更新旅程邀約
+router.put("/invite", async (req: Request, res: Response) => {
+  const { invitationId, userId, invitationResponse } = req.body;
+
+  try {
+    //1.先修改invitation的資料
+    const result = await prisma.itineraryInvitation.update({
+      where: {
+        id: invitationId,
+      },
+      data: {
+        status: invitationResponse,
+      },
+    });
+    if (!result) return;
+    //2.如果接收 將該使用者加入 user_itinerars 中
+    //0 pending 1 accpet 2 reject
+    if (invitationResponse === 1) {
+      prisma.userItinerary.create({
+        data: {
+          userId: userId,
+          itineraryId: result.itineraryId,
+        },
+      });
+    }
+
+    res.status(200).json({ suceess: true, message: "已更新狀態" });
+  } catch (err) {
+    console.log(err);
+  }
+});
+
 //更新文章
 // router.put(
 //   "/renew-article/:itineraryId",
