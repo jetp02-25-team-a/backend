@@ -23,7 +23,7 @@ export async function searchPlaces(
 
   if (AND.length === 0) return [];
 
-  return prisma.place.findMany({
+  const places = await prisma.place.findMany({
     where: { AND },
     skip: offset,
     select: {
@@ -38,6 +38,29 @@ export async function searchPlaces(
       Photos: { select: { url: true }, take: 1 },
     },
   });
+
+  if (!places.length) return [];
+
+  // 撈這批 place 的平均評分與數量
+  const rankAggs = await prisma.rank.groupBy({
+    by: ["placeId"],
+    where: { placeId: { in: places.map((p) => p.id) } },
+    _avg: { score: true },
+    _count: { score: true },
+  });
+
+  const rankMap = new Map(
+    rankAggs.map((r) => [
+      r.placeId,
+      { avg: Number(r._avg.score ?? 0).toFixed(1), count: r._count.score },
+    ])
+  );
+
+  // 合併
+  return places.map((p) => ({
+    ...p,
+    rating: rankMap.get(p.id) ?? { avg: "0.0", count: 0 },
+  }));
 }
 
 /** region 下拉建議（去重） */
