@@ -1,8 +1,8 @@
-import express, { request } from "express";
+import express from "express";
 import type { Request, Response } from "express";
 import { prisma } from "../utils/prisma-pagination.js";
 import upload from "../utils/upload-images.js";
-import { success, z } from "zod";
+import { z } from "zod";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type {
@@ -213,8 +213,12 @@ router.post("/auth", async (req: Request, res: Response) => {
       const result = jwt.verify(token, JWT_SECRET);
       res.status(200).json(result);
     } catch (e) {
-      res.status(401).json(e);
+      res.status(401).json({ message: "Invalid Token" });
     }
+  } else {
+    res
+      .status(401)
+      .json({ message: "Authorization header not found or malformed" });
   }
 });
 
