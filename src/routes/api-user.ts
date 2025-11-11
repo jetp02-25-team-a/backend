@@ -1,7 +1,8 @@
-import express from "express";
+import express, { request } from "express";
 import type { Request, Response } from "express";
 import { prisma } from "../utils/prisma-pagination.js";
-import { z } from "zod";
+import upload from "../utils/upload-images.js";
+import { success, z } from "zod";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import type {
@@ -12,6 +13,14 @@ import type {
   LoginSuccessResponse,
 } from "../interfaces/index.js";
 import { loginSchema } from "../schemas/index.js";
+import { jwtParseMiddleware, requireAuth } from "../middleware/jwt.js";
+
+interface UserUpdateData {
+  nickname?: string | null;
+  description?: string | null;
+  fullName?: string | null;
+  avatar?: string | null;
+}
 
 const router = express.Router();
 
@@ -20,6 +29,7 @@ const JWT_SECRET: string =
   process.env.JWT_SECRET || "your-secret-key-change-in-production";
 const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || "2h";
 
+//登入
 router.post("/login", async (req: Request, res: Response) => {
   try {
     // 驗證輸入資料
@@ -97,6 +107,7 @@ router.post("/login", async (req: Request, res: Response) => {
   }
 });
 
+//註冊
 router.post("/signup", async (req: Request, res: Response) => {
   //拿取資料
   const { email, password, nickname } = req.body;
@@ -115,6 +126,83 @@ router.post("/signup", async (req: Request, res: Response) => {
   res.status(200).json(result);
 });
 
+//編輯資料-拿該使用者資料
+router.get("/user/:id", async (req: Request, res: Response) => {
+  const user_id = parseInt(req.params.id);
+  if (isNaN(user_id)) return res.status(400).send("ID格式錯誤");
+  const data = await prisma.user.findUnique({
+    where: {
+      id: user_id,
+    },
+  });
+
+  if (!data) {
+    return res.status(404).json({
+      success: false,
+      data: null,
+      message: "找不到指定的會員", // 或是 "User not found"
+    });
+  }
+
+  const response = {
+    success: true,
+    data: {
+      user_id: data?.id,
+      email: data?.email,
+      nickname: data?.nickname || "",
+      avatar: data?.avatar || "",
+      description: data?.description || "",
+      fullname: data?.fullName || "",
+    },
+    message: "成功",
+  };
+  res.json(response);
+});
+
+//編輯資料
+router.put(
+  "/user/:id",
+  jwtParseMiddleware,
+  requireAuth,
+  upload.single("avatar"),
+  async (req: Request, res: Response<ApiResponse>) => {
+    const { nickname, description, fullName } = req.body;
+    const filename = req.file?.filename;
+    const user_id = parseInt(req.params.id);
+    if (isNaN(user_id)) {
+      const response = {
+        success: false,
+        message: "使用者ID錯誤",
+      };
+      return res.status(400).json(response);
+    }
+
+    const updateData: UserUpdateData = {
+      nickname: nickname,
+      description: description,
+      fullName: fullName,
+    };
+
+    if (req.file) {
+      updateData.avatar = filename;
+    }
+
+    const r = await prisma.user.update({
+      where: { id: user_id },
+      data: updateData,
+    });
+
+    const response = {
+      success: true,
+      data: r,
+      message: "更改成功",
+    };
+
+    res.json(response);
+  }
+);
+
+//JWT驗證
 router.post("/auth", async (req: Request, res: Response) => {
   const JWT_SECRET =
     process.env.JWT_SECRET || "your-secret-key-change-in-production";
@@ -125,7 +213,7 @@ router.post("/auth", async (req: Request, res: Response) => {
       const result = jwt.verify(token, JWT_SECRET);
       res.status(200).json(result);
     } catch (e) {
-      res.status(400).json(e);
+      res.status(401).json(e);
     }
   }
 });

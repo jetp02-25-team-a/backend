@@ -118,6 +118,7 @@ const io = new Server(server, {
 });
 
 chatSocket(io);
+app.use("/api", mallRouter);
 
 const port = +(process.env.PORT || "3002");
 server.listen(port, () => {

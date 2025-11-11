@@ -4,6 +4,7 @@
 .DS_Store
 Thumbs.db
 sessions
+public/images
 
 /public/css/app.css
 /public/images
