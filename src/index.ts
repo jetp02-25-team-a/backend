@@ -19,6 +19,7 @@ import placeRouter from "./routes/place";
 import featuredRouter from "./routes/place-features";
 import searchRouter from "./routes/place-search";
 import articleRouter from "./routes/article.routes";
+import mallRouter from "./routes/api-mall";
 
 import http from "http";
 import { Server } from "socket.io";

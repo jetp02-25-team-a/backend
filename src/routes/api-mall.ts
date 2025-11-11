@@ -217,7 +217,7 @@ router.get("/checkout", async (req: Request, res: Response) => {
 });
 
 router.post("/order", (req: Request, res: Response) => {
-  console.log("test");
+  console.log(req.body);
   res.send("1|OK");
 });
 
