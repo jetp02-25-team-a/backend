@@ -852,16 +852,24 @@ model ItineraryDay {
 
 // ----------------- ItineraryNode  -----------------
 model ItineraryNode {
-  id               Int @id @default(autoincrement()) @map("itinerary_node_id")
-  itineraryDayId   Int @map("itinerary_day_id") // 保留原 map 名稱，修正欄位名
-  placeId          Int @map("place_id")
-  googleMapPlaceId Int @map("google_map_place_id")
+  id             Int @id @default(autoincrement()) @map("itinerary_node_id")
+  itineraryDayId Int @map("itinerary_day_id") // 保留原 map 名稱，修正欄位名
+  // placeId          Int @map("place_id")
+  // googleMapPlaceId Int @map("google_map_place_id")
 
   durationMinutes Int @map("duration_minutes")
+  order           Int @default(0)
   status          Int
 
-  Day            ItineraryDay   @relation(fields: [itineraryDayId], references: [id])
-  GoogleMapPlace GoogleMapPlace @relation(fields: [googleMapPlaceId], references: [id])
+  // ✅ 新增連到 Attraction 的外鍵（資料庫欄位）
+  attractionId Int? @map("attraction_id")
+
+  Day ItineraryDay @relation(fields: [itineraryDayId], references: [id])
+
+  // ✅ 正確關聯 Attraction
+  Attraction Attraction? @relation(fields: [attractionId], references: [id])
+
+  // GoogleMapPlace GoogleMapPlace @relation(fields: [googleMapPlaceId], references: [id])
 
   @@map("itinerary_nodes")
 }
@@ -916,7 +924,7 @@ model GoogleMapPlace {
   photoReference   String?  @map("photo_reference") @db.Text // 可選，若有照片
   createdAt        DateTime @default(now()) @map("created_at")
 
-  ItineraryNodes ItineraryNode[]
+  // ItineraryNodes ItineraryNode[]
 
   @@map("google_map_places")
 }
@@ -950,6 +958,37 @@ model ItineraryInvitation {
   receiver  User      @relation("InvitationReceiver", fields: [receiverId], references: [id])
 
   @@map("itinerary_invitation")
+}
+
+// ----------------- Attraction  -----------------
+model Attraction {
+  id         Int     @id @default(autoincrement())
+  name       String?
+  nameZh     String? @map("name_Zh")
+  tourism    String?
+  natural    String?
+  historic   String?
+  artistName String? @map("artist_name")
+
+  lng Float
+  lat Float
+
+  addrCity        String? @map("addr_city")
+  addrCountry     String? @map("addr_country")
+  addrDistrict    String? @map("addr_district")
+  addrHousenumber String? @map("addr_housenumber")
+  addrPostcode    String? @map("addr_postcode")
+  addrProvince    String? @map("addr_province")
+  addrStreet      String? @map("addr_street")
+  addrFull        String? @map("addr_full")
+
+  image String?
+
+  // ✅ 修正為 ItineraryNode[]（你之前拼錯 ItinerarieNode）
+  nodes ItineraryNode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ----------------------------------------------------------------------
