@@ -57,7 +57,7 @@ function hhmmToDate(hhmm?: string): Date {
 const CLOSED_PLACEHOLDER_DT = hhmmToDate("00:00");
 
 // 接受 openTime/closeTime 或 open/close；公休塞占位時間（因 DateTime 非 nullable）
-function toOpeningHourRecordDT(placeId: number, h: any) {
+function toOHRecordForCreate(h: any) {
   const isClosed = h?.isClosed === true;
   const weekday = h?.weekday;
 
@@ -71,7 +71,6 @@ function toOpeningHourRecordDT(placeId: number, h: any) {
 
   if (isClosed) {
     return {
-      placeId,
       weekday,
       isClosed: true,
       openTime: CLOSED_PLACEHOLDER_DT, // 若欄位是非 nullable DateTime
@@ -87,12 +86,17 @@ function toOpeningHourRecordDT(placeId: number, h: any) {
   }
 
   return {
-    placeId,
     weekday,
     isClosed: false,
     openTime: hhmmToDate(open),
     closeTime: hhmmToDate(close),
   };
+}
+
+// 給 createMany / upsert 用：❗需要 placeId
+function toOHRecordWithPlaceId(placeId: number, h: any) {
+  const base = toOHRecordForCreate(h);
+  return { placeId, ...base };
 }
 
 /** 單筆詳情：Place + Photos + 評分統計 + 最新留言 */
@@ -323,9 +327,7 @@ export async function createPlace(input: PlaceInput) {
       // 🔹 關鍵：DateTime 轉換
       OpeningHours: input.openingHours?.length
         ? {
-            create: input.openingHours.map(
-              (h) => toOpeningHourRecordDT(h) as any
-            ),
+            create: input.openingHours.map((h) => toOHRecordForCreate(h)),
           }
         : undefined,
     },
@@ -381,7 +383,7 @@ export async function upsertPlace({ placeId, input }: PlaceUpsert) {
       // 全量覆蓋
       await tx.openingHour.deleteMany({ where: { placeId } });
       await tx.openingHour.createMany({
-        data: input.openingHours.map((h) => toOpeningHourRecordDT(placeId, h)),
+        data: input.openingHours.map((h) => toOHRecordWithPlaceId(placeId, h)),
       });
     }
 
