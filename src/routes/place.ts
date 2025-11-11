@@ -3,12 +3,55 @@ import { z } from "zod";
 import {
   getPlaceExpanded,
   searchPlacesExpanded,
-  // createReview,
+  createPlace,
+  upsertPlace,
 } from "../services/placeSelect";
 import commentsRouter from "./place-comment";
 import rankRouter from "./place-ranks";
 
 const router = Router();
+
+// 針對營業時間做限制
+const DayOpen = z.object({
+  weekday: z.number().int().min(0).max(6),
+  openTime: z.string().regex(/^\d{2}:\d{2}$/, "HH:mm"),
+  closeTime: z.string().regex(/^\d{2}:\d{2}$/, "HH:mm"),
+  isClosed: z.literal(false).optional(), // 可不填或明確 false
+});
+const DayClosed = z.object({
+  weekday: z.number().int().min(0).max(6),
+  isClosed: z.literal(true),
+});
+const OpeningHoursSchema = z.array(z.union([DayOpen, DayClosed]));
+
+const CreatePlaceBody = z.object({
+  type: z.enum(["food", "spot"]),
+  name: z.string().min(1, "地名必填"),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  address: z.string(),
+  region: z.string(),
+  contact: z.string().optional(),
+  introduce: z.string().min(10, "至少10個字"),
+  openingHours: OpeningHoursSchema.optional(),
+  cityId: z.number().int().optional(),
+  photos: z.array(z.string()).max(20).optional(),
+});
+
+const UpsertDetailBody = z.object({
+  type: z.enum(["food", "spot"]),
+  name: z.string().min(1, "地名必填"),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  address: z.string(),
+  region: z.string(),
+  contact: z.string().optional(),
+  introduce: z.string().min(10, "至少10個字"),
+  openingHours: OpeningHoursSchema.optional(),
+  cityId: z.number().int().optional(),
+  // 相片：預設新增；若要覆蓋，帶 replacePhotos: true
+  photos: z.array(z.string().url()).max(30).optional(),
+});
 
 /**
  * GET /places
@@ -98,43 +141,76 @@ router.get("/:id", async (req, res) => {
   res.json({ success: true, data });
 });
 
-/**
- * POST /places/:id/reviews
- * body: { user_name, rating(1~5), content, user_avatar? }
+/**  建立地標（簡易 or 完整都能用）
+ *    - 最小必要：type, name, latitude, longitude
+ *    - 其餘欄位都是可選（地址/聯絡/介紹/region/cityId/photos）
+ *    - 回傳新 place.id
  */
-const ReviewSchema = z.object({
-  user_name: z.string().min(1).max(50),
-  rating: z.number().int().min(1).max(5),
-  content: z.string().min(1),
-  user_avatar: z
-    .string()
-    .url()
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
+
+router.post("/", async (req, res) => {
+  try {
+    const parsed = CreatePlaceBody.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        errors: parsed.error.issues.map((e) => ({
+          path: e.path.join("."),
+          message: e.message,
+        })),
+      });
+    }
+
+    const place = await createPlace(parsed.data);
+    return res.json({ success: true, data: place });
+  } catch (err: any) {
+    console.error("POST /api/place error:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: err?.message ?? "Server error" });
+  }
 });
 
-// router.post("/:id/reviews", async (req, res) => {
-//   const id = Number(req.params.id);
-//   if (Number.isNaN(id))
-//     return res
-//       .status(400)
-//       .json({ success: false, error: { message: "Invalid id" } });
+/** 補充 / 修改詳情（詳細表單）
+ *    - 可同時：更新介紹/聯絡/地址/region/city、相片（新增或覆蓋）、營業時間、我的首則評論與評分
+ *    - 全部欄位都可選，傳了才會處理
+ */
 
-//   const parsed = ReviewSchema.safeParse({
-//     ...req.body,
-//     rating: Number(req.body?.rating),
-//   });
-//   if (!parsed.success) {
-//     return res.status(400).json({
-//       success: false,
-//       error: { message: "Invalid input", issues: parsed.error.issues },
-//     });
-//   }
+router.post("/:id", async (req, res) => {
+  try {
+    const placeId = Number(req.params.id);
 
-//   const created = await createReview(id, parsed.data);
-//   res.status(201).json({ success: true, data: created });
-// });
-// 🟢 把 comments 子路由掛進來（仍是 /places/:id/comments）
+    if (!Number.isInteger(placeId)) {
+      return res.status(400).json({ success: false, message: "placeId 無效" });
+    }
+
+    const parsed = UpsertDetailBody.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        errors: parsed.error.issues.map((e) => ({
+          path: e.path.join("."),
+          message: e.message,
+        })),
+      });
+    }
+
+    const updated = await upsertPlace({ placeId, input: parsed.data });
+    return res.json({ success: true, data: updated });
+  } catch (err: any) {
+    if (/HH:mm|缺少 open|時間格式|weekday 無效/.test(err?.message ?? "")) {
+      return res.status(422).json({ success: false, message: err.message });
+    }
+    // Prisma 常見錯誤...
+    if (err?.code === "P2025")
+      return res.status(404).json({ success: false, message: "找不到該地標" });
+    if (err?.code === "P2002")
+      return res.status(409).json({ success: false, message: "唯一鍵衝突" });
+    console.error(`POST /api/place/${req.params.id}/detail error:`, err);
+    return res
+      .status(500)
+      .json({ success: false, message: err?.message ?? "Server error" });
+  }
+});
 
 router.use("/:id/comments", commentsRouter);
 router.use("/:id/ranks", rankRouter);
