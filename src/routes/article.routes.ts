@@ -12,23 +12,23 @@ const router = express.Router();
 //*UPDATEARTICLE
 // const router = express.Router();
 
-// PUT /article/:id → edit artikel berdasarkan ID
-// router.put("/:id", upload.single("photos"), updateArticle);
-
-// router.put("/", upload.array("photo"), updateArticle async (req: Request, res: Response) => {
-//   try {
-//     const { title, content, userId, locationId } = req.body;
-
-//     // 🔍 Validasi minimal
-//     if (!title || !userId || !locationId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "title, userId, dan locationId wajib diisi",
-//       });
-//     }
-router.put("/:id", upload.array("photo"), async (req: Request, res: Response) => {
+/**
+ * ============================
+ * PUT /article/:id
+ * Update artikel berdasarkan ID
+ * ============================
+ */
+// upload.array("photo"),
+router.put("/:id",  async (req: Request, res: Response) => {
+  const { id } = req.params;
   const { title, content, userId, locationId } = req.body;
-
+  
+  // 🔍 Validasi ID numerik
+  if (!id || isNaN(parseInt(id))) {
+    return res.status(400).json({ success: false, message: "Invalid article ID" });
+  }
+  
+  // 🔍 Validasi field wajib
   if (!title || !userId || !locationId) {
     return res.status(400).json({
       success: false,
@@ -37,21 +37,60 @@ router.put("/:id", upload.array("photo"), async (req: Request, res: Response) =>
   }
 
   try {
-    // ... logika update artikel
+    // 🔎 Periksa apakah artikel ada
+    const existingPost = await prisma.post.findUnique({
+      where: { id: parseInt(id) },
+      include: { Photos: true },
+    });
+
+    if (!existingPost) {
+      return res.status(404).json({ success: false, message: "Artikel tidak ditemukan" });
+    }
+
+    // 📸 Upload new photos (jika ada)
+    const newPhotos =
+      (req.files as Express.Multer.File[] | undefined)?.map((f) => ({
+        url: `/images/${f.filename}`,
+        postId: parseInt(id),
+      })) || [];
+
+    // 🧩 Update article
+    const updatedPost = await prisma.post.update({
+      where: { id: parseInt(id) },
+      data: {
+        title,
+        content,
+        User: { connect: { id: parseInt(userId) } },
+        Location: { connect: { id: parseInt(locationId) } },
+        // Tambah foto baru (jika ada)
+        Photos: newPhotos.length > 0 ? { createMany: { data: newPhotos } } : undefined,
+      },
+      include: {
+        User: true,
+        Location: true,
+        Photos: true,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "文章編輯完成",
+      post: {
+        id: updatedPost.id,
+        title: updatedPost.title,
+        content: updatedPost.content,
+        location: updatedPost.Location?.city || "未知地點",
+        photos: updatedPost.Photos.map((p) => p.url),
+      },
+    });
   } catch (error) {
     console.error("❌ Error updating article:", error);
-    return res.status(500).json({ message: "Failed to update article" });
+    return res.status(500).json({
+      success: false,
+      message: "編輯文章失敗",
+    });
   }
 });
-
-
-
-
-
-
-// export default router;
-
-
 
 
 
