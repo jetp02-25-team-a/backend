@@ -6,6 +6,7 @@ import { Merchant, CreditOneTimePayment } from "node-ecpay-aio";
 import "dotenv/config";
 
 import type { ApiResponse, ApiErrorResponse } from "../interfaces/index.js";
+import type { CreditOneTimePaymentParams } from "node-ecpay-aio/dist/types/index.js";
 
 const router = express.Router();
 
@@ -199,7 +200,7 @@ router.get("/checkout", async (req: Request, res: Response) => {
       ItemName: "測試商品A#測試商品B", // 商品名稱 (用 # 分隔)
     };
 
-    const params = {
+    const params: CreditOneTimePaymentParams = {
       UnionPay: 2, // [需申請] 銀聯卡: 0 (可用, default) | 1 (導至銀聯網) | 2 (不可用)
     };
 
