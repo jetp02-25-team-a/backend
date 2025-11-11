@@ -1,6 +1,5 @@
 // JWT 相關介面定義
 import type { ApiResponse } from "./api.js";
-import type { User } from "./model.js";
 
 export interface JwtPayload {
   user_id: number;

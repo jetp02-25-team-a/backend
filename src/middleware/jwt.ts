@@ -34,7 +34,6 @@ export const jwtParseMiddleware = (
     try {
       // 解析 JWT token
       const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
-
       // 將解析後的用戶資訊掛載到 req 和 res.locals
       req.user = decoded;
       res.locals.user = decoded;
