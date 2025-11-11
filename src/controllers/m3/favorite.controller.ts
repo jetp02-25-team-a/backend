@@ -9,21 +9,31 @@ import {
 import { successResponse, errorResponse } from "../../utils/m3";
 
 export const getFavoritesAcc = async (req: Request, res: Response) => {
-  const userId = Number(req.user.id);
+  const userId = Number(req.user!.user_id);
   const favorites = await getFavorites(userId);
   res.json(successResponse(favorites));
 };
 
 export const addFavoriteAcc = async (req: Request, res: Response) => {
-  const userId = Number(req.user.id);
-  const accId = Number(req.params.accId);
+  const userId = Number(req.user!.user_id);
+  const accId = parseInt(req.params.accId ?? "", 10);
+
+  if (Number.isNaN(accId)) {
+    return res.status(400).json(errorResponse("無效的住宿 ID", 400));
+  }
+
   const fav = await addFavorite(userId, accId);
   res.json(successResponse(fav, "已加入收藏"));
 };
 
 export const deleteFavoriteAcc = async (req: Request, res: Response) => {
-  const userId = Number(req.user.id);
-  const accId = Number(req.params.accId);
+  const userId = Number(req.user!.user_id);
+  const accId = parseInt(req.params.accId ?? "", 10);
+
+  if (Number.isNaN(accId)) {
+    return res.status(400).json(errorResponse("無效的住宿 ID", 400));
+  }
+
   try {
     await deleteFavorite(userId, accId);
     res.json(successResponse(null, "收藏已移除"));
@@ -33,8 +43,13 @@ export const deleteFavoriteAcc = async (req: Request, res: Response) => {
 };
 
 export const toggleFavoriteAcc = async (req: Request, res: Response) => {
-  const userId = Number(req.user.id);
-  const accId = Number(req.params.accId);
+  const userId = Number(req.user!.user_id);
+  const accId = parseInt(req.params.accId ?? "", 10);
+
+  if (Number.isNaN(accId)) {
+    return res.status(400).json(errorResponse("無效的住宿 ID", 400));
+  }
+
   const result = await toggleFavorite(userId, accId);
   res.json(
     successResponse(result, result.toggled ? "已加入收藏" : "已取消收藏")
