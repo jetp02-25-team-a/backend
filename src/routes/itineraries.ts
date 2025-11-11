@@ -28,6 +28,7 @@ function decodeToken(req: Request) {
 router.post("/create-itinerary", async (req: Request, res: Response) => {
   const payload = decodeToken(req); //user_id ,
   const { title, area, startDay, endDay, startTime, figure } = req.body;
+  console.log({ title, area, startDay, endDay, startTime, figure });
 
   try {
     if (!payload) return;
@@ -137,11 +138,14 @@ router.get("/detail", async (req: Request, res: Response) => {
 router.get("/itinerary-list", async (req: Request, res: Response) => {
   const { itineraryId, userId } = req.query;
 
-  if (!itineraryId || !userId) return;
+  if (!itineraryId || !userId) {
+    return res.status(400).json({ error: "缺少必要參數" });
+  }
+
   try {
     const result = await prisma.user.findMany({
       where: {
-        id: +userId,
+        id: Number(userId),
       },
       select: {
         id: true,
@@ -149,29 +153,40 @@ router.get("/itinerary-list", async (req: Request, res: Response) => {
         nickname: true,
         Itineraries: {
           where: {
-            id: +itineraryId,
+            id: Number(itineraryId),
             status: 1,
           },
           include: {
             Days: {
+              where: {
+                status: 1,
+              },
               select: {
                 dayDate: true,
                 startTime: true,
                 Nodes: {
-                  where: {
-                    status: 1,
-                  },
+                  where: { status: 1 },
                   select: {
+                    id: true,
                     durationMinutes: true,
-                    GoogleMapPlace: {
+                    order: true,
+                    Attraction: {
                       select: {
+                        id: true,
                         name: true,
                         lat: true,
                         lng: true,
+                        image: true,
                       },
                     },
                   },
+                  orderBy: {
+                    order: "asc",
+                  },
                 },
+              },
+              orderBy: {
+                dayDate: "asc",
               },
             },
             Images: {
@@ -201,62 +216,10 @@ router.get("/itinerary-list", async (req: Request, res: Response) => {
       },
     });
 
-    // const result = await prisma.itinerary.findFirst({
-    //   where: {
-    //     id: +itineraryId,
-    //     status: 1,
-    //     userId: +userId,
-    //   },
-    //   include: {
-    //     Days: {
-    //       where: {
-    //         status: 1,
-    //       },
-    //       select: {
-    //         dayDate: true,
-    //         startTime: true,
-    //         Nodes: {
-    //           select: {
-    //             durationMinutes: true,
-    //             GoogleMapPlace: {
-    //               select: {
-    //                 name: true,
-    //                 formattedAddress: true,
-    //                 lat: true,
-    //                 lng: true,
-    //                 photoReference: true,
-    //               },
-    //             },
-    //           },
-    //           orderBy: {
-    //             placeId: "desc",
-    //           },
-    //         },
-    //       },
-    //     },
-    //     ItineraryComments: {
-    //       select: {
-    //         content: true,
-    //         updatedAt: true,
-    //         Sender: {
-    //           select: {
-    //             fullName: true,
-    //             nickname: true,
-    //             avatar: true,
-    //           },
-    //         },
-    //       },
-    //     },
-    //     Images: {
-    //       select: {
-    //         imageName: true,
-    //       },
-    //     },
-    //   },
-    // });
     res.status(200).json({ success: true, data: result });
   } catch (err) {
-    console.log(err);
+    console.error(err);
+    res.status(500).json({ error: "伺服器錯誤" });
   }
 });
 
@@ -938,31 +901,9 @@ router.post("/invite", async (req: Request, res: Response) => {
 // 查詢自己所有接收到的行程邀約
 router.get("/all-invite/:userId", async (req: Request, res: Response) => {
   const { userId } = req.params;
-  console.log("進入 all-invite");
+  console.log("userId=>", userId);
+
   try {
-    // const result = await prisma.itineraryInvitation.findMany({
-    //   where: {
-    //     receiverId: +userId,
-    //     senderId: +userId,
-    //     status: 0,
-    //   },
-    //   include: {
-    //     itinerary: {
-    //       select: {
-    //         userId: true,
-    //         title: true,
-    //       },
-    //     },
-    //     sender: {
-    //       select: {
-    //         id: true,
-    //         nickname: true,
-    //         fullName: true,
-    //         avatar: true,
-    //       },
-    //     },
-    //   },
-    // });
     const received = await prisma.itineraryInvitation.findMany({
       where: {
         receiverId: +userId,
