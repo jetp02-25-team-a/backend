@@ -151,6 +151,7 @@ router.get("/itinerary-list", async (req: Request, res: Response) => {
         id: true,
         fullName: true,
         nickname: true,
+        avatar: true,
         Itineraries: {
           where: {
             id: Number(itineraryId),
@@ -199,6 +200,13 @@ router.get("/itinerary-list", async (req: Request, res: Response) => {
                 senderId: true,
                 content: true,
                 updatedAt: true,
+                Sender: {
+                  select: {
+                    nickname: true,
+                    fullName: true,
+                    avatar: true,
+                  },
+                },
               },
               orderBy: {
                 updatedAt: "desc",
