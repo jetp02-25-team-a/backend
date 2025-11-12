@@ -41,6 +41,13 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
         figure: figure,
       },
     });
+    //1-2.更新行程至使用者的行程內
+    await prisma.userItinerary.create({
+      data: {
+        userId: payload.user_id,
+        itineraryId: itinerary.id,
+      },
+    });
 
     //2.建立每日行程
     const start = moment.tz(startDay, "Asia/Taipei"); //2025-11-10",轉亞洲本地端
