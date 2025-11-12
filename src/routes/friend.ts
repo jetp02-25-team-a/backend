@@ -356,16 +356,229 @@ router.post("/respond", async (req: Request, res: Response) => {
   }
 });
 
-//用使用者的id 尋找擁有相同景點經驗的非朋友使用者
-// router.get("/similar-experience", async (req: Request, res: Response) => {
-//   const payload = decodeToken(req);
-//   if (!payload)
-//     return res.status(401).json({ success: false, message: "未授權" });
+//確認是否為好友
+router.get("/check", async (req: Request, res: Response) => {
+  const { userId, friendId } = req.query; //想確認的對象id
+  if (!userId || !friendId) {
+    return res.status(400).json({ success: false, message: "缺少參數" });
+  }
+  try {
+    const result = await prisma.friendship.findFirst({
+      where: {
+        status: 1,
+        OR: [
+          { userId: +userId, friendId: +friendId },
+          { userId: +friendId, friendId: +userId },
+        ],
+      },
+    });
 
-//   try {
-//     prisma
-//   } catch (err) {
-//     console.log(err);
-//   }
-// });
+    if (result) {
+      return res
+        .status(200)
+        .json({ success: true, isFriend: true, message: "是好友關係" });
+    } else {
+      return res
+        .status(200)
+        .json({ success: true, isFriend: false, message: "非好友關係" });
+    }
+  } catch (err) {
+    console.log(err);
+  }
+});
+
+// 用使用者的 id 尋找擁有相同景點經驗的非朋友使用者
+router.get("/similar-experience", async (req: Request, res: Response) => {
+  const payload = decodeToken(req);
+  if (!payload) {
+    return res.status(401).json({ success: false, message: "未授權" });
+  }
+
+  const limit = Number(req.query.limit) || 20; // 可選的限制筆數
+
+  try {
+    // 1. 取得使用者擁有或參與的行程 ID
+    const ownedItineraries = await prisma.itinerary.findMany({
+      where: { userId: payload.user_id, status: 1 },
+      select: { id: true },
+    });
+
+    const joinedItineraries = await prisma.userItinerary.findMany({
+      where: { userId: payload.user_id },
+      select: { itineraryId: true },
+    });
+
+    const allItineraryIds = [
+      ...new Set([
+        ...ownedItineraries.map((i) => i.id),
+        ...joinedItineraries.map((j) => j.itineraryId),
+      ]),
+    ];
+
+    if (allItineraryIds.length === 0) {
+      return res
+        .status(200)
+        .json({ success: true, data: [], message: "尚無任何行程紀錄" });
+    }
+
+    // 2. 抓出使用者所有行程中的景點 (distinct attractionId)
+    const userNodes = await prisma.itineraryNode.findMany({
+      where: {
+        attractionId: { not: null },
+        status: 1,
+        Day: {
+          itineraryId: { in: allItineraryIds },
+        },
+      },
+      select: { attractionId: true },
+    });
+
+    const experiencedAttractionIds = [
+      ...new Set(userNodes.map((n) => n.attractionId as number)),
+    ];
+
+    if (experiencedAttractionIds.length === 0) {
+      return res
+        .status(200)
+        .json({ success: true, data: [], message: "尚無景點經驗" });
+    }
+
+    // 3. 查詢已接受好友 (雙向)
+    const friendships = await prisma.friendship.findMany({
+      where: {
+        status: 1,
+        OR: [{ userId: payload.user_id }, { friendId: payload.user_id }],
+      },
+      select: { userId: true, friendId: true },
+    });
+
+    const friendIds = new Set<number>();
+    friendships.forEach((f) => {
+      if (f.userId !== payload.user_id) friendIds.add(f.userId);
+      if (f.friendId !== payload.user_id) friendIds.add(f.friendId);
+    });
+
+    // 4. 找出其他使用者 (排除自己 + 好友)，其行程含有上述景點
+    // 只看「他們自己擁有的行程」；如果也要算他們參與的，可再加 userItinerary
+    const candidateUsers = await prisma.user.findMany({
+      where: {
+        id: {
+          notIn: [payload.user_id, ...Array.from(friendIds)],
+        },
+        Itineraries: {
+          some: {
+            status: 1,
+            Days: {
+              some: {
+                Nodes: {
+                  some: {
+                    attractionId: { in: experiencedAttractionIds },
+                    status: 1,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        nickname: true,
+        fullName: true,
+        avatar: true,
+        Itineraries: {
+          where: { status: 1 },
+          select: {
+            id: true,
+            Days: {
+              select: {
+                Nodes: {
+                  where: {
+                    status: 1,
+                    attractionId: { in: experiencedAttractionIds },
+                  },
+                  select: {
+                    attractionId: true,
+                    Attraction: {
+                      select: {
+                        id: true,
+                        name: true,
+                        image: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      take: limit,
+    });
+
+    // 5. 整理重疊景點數與樣本
+    const result = candidateUsers
+      .map((u) => {
+        const overlapped: {
+          id: number;
+          name: string | null;
+          image: string | null;
+        }[] = [];
+
+        u.Itineraries.forEach((iti) => {
+          iti.Days.forEach((d) => {
+            d.Nodes.forEach((n) => {
+              if (
+                n.attractionId &&
+                experiencedAttractionIds.includes(n.attractionId)
+              ) {
+                overlapped.push({
+                  id: n.Attraction?.id ?? n.attractionId,
+                  name: n.Attraction?.name ?? null,
+                  image: n.Attraction?.image ?? null,
+                });
+              }
+            });
+          });
+        });
+
+        const uniqueOverlap = new Map<
+          number,
+          { id: number; name: string | null; image: string | null }
+        >();
+        overlapped.forEach((o) => {
+          uniqueOverlap.set(o.id, o);
+        });
+
+        return {
+          user: {
+            id: u.id,
+            nickname: u.nickname,
+            fullName: u.fullName,
+            avatar: u.avatar,
+          },
+          overlapCount: uniqueOverlap.size,
+          // 完整的重疊景點列表
+          overlappedAttractions: Array.from(uniqueOverlap.values()),
+        };
+      })
+      .filter((r) => r.overlapCount > 0)
+      .sort((a, b) => b.overlapCount - a.overlapCount);
+
+    return res.status(200).json({
+      success: true,
+      // 總共有多少人與我有相同旅遊經驗
+      totalMatches: result.length,
+      data: result,
+      meta: {
+        experiencedAttractionCount: experiencedAttractionIds.length,
+        candidates: result.length,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: "伺服器錯誤" });
+  }
+});
+
 export default router;
