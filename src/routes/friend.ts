@@ -365,4 +365,24 @@ router.post("/respond", async (req: Request, res: Response) => {
   }
 });
 
+//用使用者的id 尋找擁有相同景點經驗的非朋友使用者
+// router.get("/similar-experience", async (req: Request, res: Response) => {
+//   const payload = decodeToken(req);
+//   if (!payload)
+//     return res.status(401).json({ success: false, message: "未授權" });
+
+//   try {
+//     // 取得目前使用者的景點經驗
+//     const userExperiences = await prisma.itinerary.findMany({
+//       where: { userId: payload.user_id },
+//       select: { locationId: true },
+//     });
+//     const locationIds = userExperiences.map(exp => exp.locationId);
+
+//     // 找出非朋友且有相同景點經驗的使用者
+//   } catch (err) {
+//     console.log(err);
+//     return res.status(500).json({ success: false, message: "伺服器錯誤" });
+//   }
+
 export default router;
