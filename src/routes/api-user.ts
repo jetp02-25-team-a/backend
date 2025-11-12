@@ -222,4 +222,24 @@ router.post("/auth", async (req: Request, res: Response) => {
   }
 });
 
+router.get("/auth", async (req: Request, res: Response) => {
+  const JWT_SECRET =
+    process.env.JWT_SECRET || "your-secret-key-change-in-production";
+  const auth = req.get("Authorization");
+
+  if (auth && auth.startsWith("Bearer ")) {
+    const token = auth.slice(7);
+    try {
+      const result = jwt.verify(token, JWT_SECRET);
+      res.status(200).json(result); // 回傳 payload
+    } catch (e) {
+      res.status(401).json({ message: "Invalid Token" });
+    }
+  } else {
+    res
+      .status(401)
+      .json({ message: "Authorization header not found or malformed" });
+  }
+});
+
 export default router;

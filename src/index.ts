@@ -21,6 +21,8 @@ import searchRouter from "./routes/place-search";
 import articleRouter from "./routes/article.routes";
 import mallRouter from "./routes/api-mall";
 
+import { m3AccommodationsRoute, m3Favorite } from "./routes/m3";
+
 import http from "http";
 import { Server } from "socket.io";
 import { chatSocket } from "./socket/socket";
@@ -108,6 +110,10 @@ app.use("/api/place/featured", featuredRouter);
 app.use("/api/place/search", searchRouter);
 app.use("/api/place", placeRouter);
 app.use("/api/article", articleRouter);
+
+//m3 routes
+app.use("/api/m3", m3AccommodationsRoute);
+app.use("/api/m3", m3Favorite);
 
 // ---------- 建立 HTTP + Socket.IO 伺服器 ----------
 const server = http.createServer(app);

@@ -11,11 +11,11 @@ export const prisma = new PrismaClient().$extends(
       limit: 10, // cursor pagination 預設筆數
       getCursor(record: any) {
         // 使用 cursor pagination，ab_id 是主鍵，保證唯一性
-        return record.ab_id.toString();
+        return record.id.toString();
       },
       parseCursor(cursor: string) {
         return {
-          ab_id: parseInt(cursor),
+          id: parseInt(cursor),
         };
       },
     },
