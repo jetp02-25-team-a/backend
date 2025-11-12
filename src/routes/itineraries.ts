@@ -753,7 +753,6 @@ router.post("/invite", async (req: Request, res: Response) => {
 // 查詢自己所有接收到的行程邀約
 router.get("/all-invite/:userId", async (req: Request, res: Response) => {
   const { userId } = req.params;
-  console.log("userId=>", userId);
 
   try {
     const received = await prisma.itineraryInvitation.findMany({

@@ -4,17 +4,8 @@ import { json, success } from "zod";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { prisma } from "../utils/prisma-pagination";
 import { ca } from "zod/v4/locales";
-//friendships<= 路徑
-const router = express.Router();
 
-// {
-//   user_id: 2,
-//   email: 'user@test.com',
-//   nickname: 'TestUser',
-//   avatar: null,
-//   iat: 1761978258,
-//   exp: 1762064658
-// }
+const router = express.Router();
 
 function decodeToken(req: Request) {
   const token = req.headers["authorization"];
@@ -372,17 +363,9 @@ router.post("/respond", async (req: Request, res: Response) => {
 //     return res.status(401).json({ success: false, message: "未授權" });
 
 //   try {
-//     // 取得目前使用者的景點經驗
-//     const userExperiences = await prisma.itinerary.findMany({
-//       where: { userId: payload.user_id },
-//       select: { locationId: true },
-//     });
-//     const locationIds = userExperiences.map(exp => exp.locationId);
-
-//     // 找出非朋友且有相同景點經驗的使用者
+//     prisma
 //   } catch (err) {
 //     console.log(err);
-//     return res.status(500).json({ success: false, message: "伺服器錯誤" });
 //   }
-
+// });
 export default router;
