@@ -151,7 +151,17 @@ router.get("/userinfo", async (req: Request, res: Response) => {
       include: {
         Posts: true,
         Favorites: true,
-        FriendshipsFriend: true,
+        FriendshipsFriend: {
+          where: { status: 1 },
+          include: {
+            User: {
+              select: {
+                avatar: true,
+                nickname: true,
+              },
+            },
+          },
+        },
       },
     });
     res.status(200).json({ success: true, data: result });
