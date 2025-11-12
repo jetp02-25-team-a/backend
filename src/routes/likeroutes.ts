@@ -1,12 +1,12 @@
-import { Router, Request, Response } from 'express';
-import { prisma } from '../lib/prisma';
-import { jwtParseMiddleware, requireAuth } from '../middleware/auth';
+import type { Router, Request, Response } from 'express';
+import { prisma } from '../utils/prisma-pagination';
+import { jwtParseMiddleware, requireAuth } from '../middleware/jwt';
 
 const likeRouter = Router();
 
 /**
  * POST /post/:id/like
- * Toggle like/unlike untuk satu post
+ * Toggle like/unlike for 1 post
  */
 likeRouter.post(
   '/post/:id/like',
