@@ -134,7 +134,7 @@ router.get("/allmessage", async (req: Request, res: Response) => {
 
 router.get("/userinfo", async (req: Request, res: Response) => {
   const { userId } = req.query;
-  console.log("userId=>", userId);
+
   try {
     if (!userId) return;
     const result = await prisma.user.findFirst({
