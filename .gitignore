@@ -5,9 +5,11 @@
 Thumbs.db
 sessions
 public/images
+public/uploads
 
 /public/css/app.css
 /public/images
+/public/uploads
 
 prisma/migrations
 

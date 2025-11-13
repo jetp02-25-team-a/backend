@@ -1,5 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+
 import {
   getPlaceExpanded,
   searchPlacesExpanded,
@@ -10,6 +15,37 @@ import commentsRouter from "./place-comment";
 import rankRouter from "./place-ranks";
 
 const router = Router();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadDir = path.join(
+  __dirname,
+  "..",
+  "..",
+  "public",
+  "uploads",
+  "places"
+);
+
+// 確保資料夾存在
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext);
+    const safeBase = base.replace(/[^\w\-]/g, "_");
+    const filename = `${Date.now()}-${safeBase}${ext}`;
+    cb(null, filename);
+  },
+});
+
+const upload = multer({ storage });
 
 // 針對營業時間做限制
 const DayOpen = z.object({
@@ -27,8 +63,8 @@ const OpeningHoursSchema = z.array(z.union([DayOpen, DayClosed]));
 const CreatePlaceBody = z.object({
   type: z.enum(["food", "spot"]),
   name: z.string().min(1, "地名必填"),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
+  latitude: z.coerce.number().optional(),
+  longitude: z.coerce.number().optional(),
   address: z.string(),
   region: z.string(),
   contact: z.string().optional(),
@@ -49,8 +85,7 @@ const UpsertDetailBody = z.object({
   introduce: z.string().min(10, "至少10個字"),
   openingHours: OpeningHoursSchema.optional(),
   cityId: z.number().int().optional(),
-  // 相片：預設新增；若要覆蓋，帶 replacePhotos: true
-  photos: z.array(z.string().url()).max(30).optional(),
+  photos: z.array(z.string()).max(30).optional(),
 });
 
 /**
@@ -147,9 +182,51 @@ router.get("/:id", async (req, res) => {
  *    - 回傳新 place.id
  */
 
-router.post("/", async (req, res) => {
+router.post("/", upload.array("photos", 20), async (req, res) => {
   try {
-    const parsed = CreatePlaceBody.safeParse(req.body);
+    const body = req.body;
+    const files = (req.files as Express.Multer.File[]) || [];
+    // 把實體檔案變成給前端用的路徑字串（會存進 DB）
+    const photoUrls = files.map((f) => {
+      return `/uploads/places/${f.filename}`; // 前端之後 <img src={url} />
+    });
+
+    let openingHours = undefined;
+
+    if (body.openingHours) {
+      try {
+        openingHours = JSON.parse(body.openingHours);
+      } catch {
+        // parse 失敗可以丟錯或讓 Zod 報錯
+      }
+    }
+
+    const inputForZod = {
+      type: body.type, // "food" | "spot"
+      name: body.name,
+      address: body.address,
+      region: body.region,
+      contact: body.contact,
+      introduce: body.introduce,
+      latitude:
+        body.latitude !== undefined && body.latitude !== ""
+          ? Number(body.latitude)
+          : undefined,
+      longitude:
+        body.longitude !== undefined && body.longitude !== ""
+          ? Number(body.longitude)
+          : undefined,
+      openingHours: openingHours,
+      cityId:
+        body.cityId !== undefined && body.cityId !== ""
+          ? Number(body.cityId)
+          : undefined,
+      photos: files.length
+        ? files.map((f) => `/uploads/places/${f.filename}`)
+        : undefined,
+    };
+
+    const parsed = CreatePlaceBody.safeParse(inputForZod);
     if (!parsed.success) {
       return res.status(400).json({
         success: false,
@@ -161,6 +238,7 @@ router.post("/", async (req, res) => {
     }
 
     const place = await createPlace(parsed.data);
+    console.log("body =", body);
     return res.json({ success: true, data: place });
   } catch (err: any) {
     console.error("POST /api/place error:", err);
@@ -175,7 +253,7 @@ router.post("/", async (req, res) => {
  *    - 全部欄位都可選，傳了才會處理
  */
 
-router.post("/:id", async (req, res) => {
+router.post("/:id", upload.array("photos", 20), async (req, res) => {
   try {
     const placeId = Number(req.params.id);
 
@@ -183,7 +261,14 @@ router.post("/:id", async (req, res) => {
       return res.status(400).json({ success: false, message: "placeId 無效" });
     }
 
-    const parsed = UpsertDetailBody.safeParse(req.body);
+    const files = (req.files as Express.Multer.File[]) || [];
+    const photoUrls = files.map((f) => `/uploads/places/${f.filename}`);
+
+    const parsed = UpsertDetailBody.safeParse({
+      ...req.body,
+      photos: photoUrls.length ? photoUrls : undefined,
+    });
+
     if (!parsed.success) {
       return res.status(400).json({
         success: false,
