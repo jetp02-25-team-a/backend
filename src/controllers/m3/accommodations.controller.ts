@@ -79,7 +79,7 @@ export const getAccommodationSearch = async (
       favorites,
       userId,
     } = req.query;
-    console.log(req.query);
+
     const hasUserInputDate =
       typeof checkInDate === "string" &&
       typeof checkOutDate === "string" &&

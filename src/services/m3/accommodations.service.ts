@@ -127,8 +127,6 @@ export async function searchAccommodations(params: SearchParams) {
 
   const where = buildAccommodationWhere(params);
 
-  console.log("where: ", where);
-
   const [data, meta] = await (prisma.accommodation as any)
     .paginate({
       where,
