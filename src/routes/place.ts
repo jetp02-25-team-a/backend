@@ -297,7 +297,7 @@ router.post("/:id", upload.array("photos", 20), async (req, res) => {
   }
 });
 
-router.use("/:id/comments", commentsRouter);
-router.use("/:id/ranks", rankRouter);
+router.use("/", commentsRouter);
+router.use("/", rankRouter);
 
 export default router;
