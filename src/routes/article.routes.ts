@@ -172,6 +172,71 @@ router.get("/post/:id/likes", async (req: Request, res: Response) => {
   }
 });
 
+
+
+// //  * ============================
+// //  * POST /article/:id/like
+// //  * Toggle Like / Unlike
+// //  * ============================
+// //  */
+
+
+
+
+// router.post('/article/:id/like', async (req: Request, res: Response) => {
+//   const { id } = req.params;
+//   const userId = req.body.userId; // atau ambil dari JWT
+
+//   try {
+//     const like = await prisma.like.create({
+//       data: {
+//         postId: Number(id),
+//         userId: Number(userId),
+//       },
+//     });
+
+//     res.json({ success: true, like });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ success: false, error: 'Failed to like article' });
+//   }
+// });
+/* ==========================================================
+   POST /:id/like - Tambah atau toggle like artikel
+   ========================================================== */
+router.post('/:id/like', jwtParseMiddleware, requireAuth, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const userId = req.user?.user_id;
+
+  if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+  try {
+    const postId = Number(id);
+    const existingLike = await prisma.like.findFirst({
+      where: { postId, userId },
+    });
+
+    if (existingLike) {
+      // Jika sudah like, berarti un-like
+      await prisma.like.delete({ where: { id: existingLike.id } });
+      const count = await prisma.like.count({ where: { postId } });
+      return res.json({ success: true, liked: false, likeCount: count });
+    }
+
+    // Jika belum like, tambah like baru
+    await prisma.like.create({
+      data: { postId, userId },
+    });
+
+    const count = await prisma.like.count({ where: { postId } });
+    res.json({ success: true, liked: true, likeCount: count });
+  } catch (error) {
+    console.error('❌ Error liking article:', error);
+    res.status(500).json({ success: false, message: 'Failed to like article' });
+  }
+});
+
+
 export default router;
 
 //     app.post('/api/article/:id/like', async (req, res) => {

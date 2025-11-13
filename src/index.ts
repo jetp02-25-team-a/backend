@@ -19,6 +19,7 @@ import placeRouter from "./routes/place";
 import featuredRouter from "./routes/place-features";
 import searchRouter from "./routes/place-search";
 import articleRouter from "./routes/article.routes";
+import likeroutes from "./routes/likeroutes";
 import mallRouter from "./routes/api-mall";
 import itinerariesRouter from "./routes/itineraries";
 
@@ -114,6 +115,7 @@ app.use("/api/place", placeRouter);
 app.use("/api/article", articleRouter);
 app.use("/api/itineraries", itinerariesRouter);
 
+app.use("/api/likeroutes",likeroutes);
 //m3 routes
 app.use("/api/m3", m3AccommodationsRoute);
 app.use("/api/m3", m3Favorite);
