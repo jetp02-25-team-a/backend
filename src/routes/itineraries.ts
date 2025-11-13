@@ -230,6 +230,16 @@ router.get("/itinerary-list", async (req: Request, res: Response) => {
             status: 1,
           },
           include: {
+            UserLinked: {
+              include: {
+                User: {
+                  select: {
+                    id: true,
+                    avatar: true,
+                  },
+                },
+              },
+            },
             Days: {
               where: {
                 status: 1,
