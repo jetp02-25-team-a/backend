@@ -4,6 +4,7 @@ import { prisma } from "../utils/prisma-pagination.js";
 import { jwtParseMiddleware, requireAuth } from "../middleware/jwt.js";
 import { Merchant, CreditOneTimePayment } from "node-ecpay-aio";
 import "dotenv/config";
+import upload from "../utils/upload-images.js";
 
 import type { ApiResponse, ApiErrorResponse } from "../interfaces/index.js";
 import type { CreditOneTimePaymentParams } from "node-ecpay-aio/dist/types/index.js";
@@ -181,11 +182,95 @@ router.get(
   }
 );
 
-router.get("/checkout", async (req: Request, res: Response) => {
+//處理物品字串
+function formatShoppingList(originalString: string): string {
+  // 1. 將字串按分號和換行符 (;) 分割成項目數組
+  //    並過濾掉任何空字串 (例如最後一個分號後面的空字串)
+  const items = originalString
+    .split(";")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+  // 2. 處理每個項目
+  const processedItems = items.map((item) => {
+    return item
+      .replace(/\s*\((.*?)\)/g, (match, group1) => {
+        return ` ${group1} `;
+      })
+      .trim()
+      .replace(/\s+/g, " ");
+  });
+
+  return processedItems.join("#");
+}
+
+//結帳
+router.post("/checkout", upload.none(), async (req: Request, res: Response) => {
+  const total = parseInt(req.body.total_price);
+  const item = formatShoppingList(req.body.product_list);
+  const id = parseInt(req.body.userid);
+  const MerchantTradeNo = `BP${Date.now()}`;
+  const data = req.body;
+
+  const variants: number[] = [];
+  const amounts: number[] = [];
+  const price: number[] = [];
+
+  const keys = Object.keys(data);
+
+  const itemKeys = keys.filter(
+    (key) => key.startsWith("item_variant") || key.startsWith("item_amount")
+  );
+
+  itemKeys.forEach((key) => {
+    const value = data[key];
+    if (key.startsWith("item_variant")) {
+      variants.push(parseInt(value, 10));
+    } else if (key.startsWith("item_amount")) {
+      amounts.push(parseInt(value, 10));
+    }
+  });
+
+  for (const id of variants) {
+    const variant = await prisma.productVariant.findUnique({
+      where: { id: id },
+    });
+    if (variant && variant.price) {
+      price.push(variant.price);
+    }
+  }
+
+  const orderDetailsData = variants.map((variantId, index) => {
+    const productAmount = amounts[index];
+    const unitPrice = price[index];
+    const subTotal = productAmount * unitPrice;
+
+    return {
+      variantId: variantId, // 變體ID
+      productAmount: productAmount, // 數量
+      subTotal: subTotal, // 小計
+    };
+  });
+
   try {
+    //寫入資料庫
+    const newOrderWithDetails = await prisma.order.create({
+      data: {
+        // Order 欄位
+        userId: id,
+        orderTotal: total,
+        tradeId: MerchantTradeNo,
+
+        // 巢狀創建 OrderDetails
+        OrderDetails: {
+          create: orderDetailsData,
+        },
+      },
+    });
+
     const baseParams = {
       // 必填參數
-      MerchantTradeNo: `test${Date.now()}`, // 訂單編號 (唯一值)
+      MerchantTradeNo: MerchantTradeNo, // 訂單編號 (唯一值)
       MerchantTradeDate: new Date().toLocaleString("zh-TW", {
         year: "numeric",
         month: "2-digit",
@@ -195,9 +280,10 @@ router.get("/checkout", async (req: Request, res: Response) => {
         second: "2-digit",
         hour12: false,
       }),
-      TotalAmount: 100, // 交易金額
-      TradeDesc: "測試商品交易", // 交易描述
-      ItemName: "測試商品A#測試商品B", // 商品名稱 (用 # 分隔)
+      ClientBackURL: "http://localhost:3000/shops",
+      TotalAmount: total, // 交易金額
+      TradeDesc: "旅行背包", // 交易描述
+      ItemName: item, // 商品名稱 (用 # 分隔)
     };
 
     const params: CreditOneTimePaymentParams = {
