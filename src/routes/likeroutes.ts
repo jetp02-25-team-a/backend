@@ -8,21 +8,45 @@ import { jwtParseMiddleware, requireAuth } from '../middleware/jwt';
 const router = express.Router();
 
 // ✅ Route untuk menambah like berdasarkan postId
-router.post('/article/:id/like', async (req, res) => {
+// router.post('/article/:id/like', async (req, res) => {
+//   const { id } = req.params;
+
+//   try {
+//     const post = await prisma.post.update({
+//       where: { id: Number(id) },
+//       data: { like: { increment: 1 } },
+//     });
+
+//     res.json({ success: true, post });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ success: false, error: 'Failed to like article' });
+//   }
+// });
+
+router.post('/article/:id/like', async (req: Request, res: Response) => {
   const { id } = req.params;
+  const userId = req.body.userId; // atau ambil dari JWT
 
   try {
-    const post = await prisma.post.update({
-      where: { id: Number(id) },
-      data: { likes: { increment: 1 } },
+    const like = await prisma.like.create({
+      data: {
+        postId: Number(id),
+        userId: Number(userId),
+      },
     });
 
-    res.json({ success: true, post });
+    res.json({ success: true, like });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, error: 'Failed to like article' });
   }
 });
+
+
+
+
+
 
 export default router;
 
