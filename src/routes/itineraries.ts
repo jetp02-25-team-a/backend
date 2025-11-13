@@ -32,20 +32,40 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
 
   try {
     if (!payload) return;
-    //1.先建立行程
-    const itinerary = await prisma.itinerary.create({
-      data: {
-        userId: payload.user_id,
-        title: title,
-        area: area,
-        figure: figure,
-      },
+    // 使用交易確保建立行程、聊天室與成員一致
+    const [itinerary, room] = await prisma.$transaction([
+      prisma.itinerary.create({
+        data: {
+          userId: payload.user_id,
+          title: title,
+          area: area,
+          figure: figure,
+        },
+      }),
+      prisma.room.create({
+        data: {
+          roomName: title ? `行程: ${title}` : `Itinerary-${Date.now()}`,
+        },
+      }),
+    ]);
+
+    // 更新 itinerary 加上 roomId
+    await prisma.itinerary.update({
+      where: { id: itinerary.id },
+      data: { roomId: room.id },
     });
-    //1-2.更新行程至使用者的行程內
+
+    // 將使用者加入 user_itineraries 與房間成員
     await prisma.userItinerary.create({
       data: {
         userId: payload.user_id,
         itineraryId: itinerary.id,
+      },
+    });
+    await prisma.roomMember.create({
+      data: {
+        roomId: room.id,
+        userId: payload.user_id,
       },
     });
 
@@ -82,6 +102,7 @@ router.post("/create-itinerary", async (req: Request, res: Response) => {
         success: true,
         message: "行程建立完成",
         itineraryId: itinerary.id,
+        roomId: room.id,
       });
     }
   } catch (err) {
@@ -824,17 +845,40 @@ router.patch("/invite", async (req: Request, res: Response) => {
     //2.如果接收 將該使用者加入 user_itinerars 中
     //0 pending 1 accpet 2 reject
     if (invitationResponse === 1) {
+      // 查詢行程取得 roomId
+      const itinerary = await prisma.itinerary.findUnique({
+        where: { id: result.itineraryId },
+        select: { roomId: true },
+      });
+
+      if (!itinerary?.roomId) {
+        return res.status(404).json({
+          success: false,
+          message: "找不到對應的聊天室",
+        });
+      }
+
+      // 加入行程
       await prisma.userItinerary.create({
         data: {
           userId: userId,
           itineraryId: result.itineraryId,
         },
       });
+
+      // 加入聊天室
+      await prisma.roomMember.create({
+        data: {
+          roomId: itinerary.roomId,
+          userId: userId,
+        },
+      });
     }
 
-    res.status(200).json({ suceess: true, message: "已更新狀態" });
+    res.status(200).json({ success: true, message: "已更新狀態" });
   } catch (err) {
     console.log(err);
+    res.status(500).json({ success: false, message: "伺服器錯誤" });
   }
 });
 

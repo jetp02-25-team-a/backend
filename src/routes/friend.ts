@@ -30,7 +30,7 @@ router.get("/", async (req: Request, res: Response) => {
         status: 1, // 只回傳已接受的好友
       },
       select: {
-        User: {
+        Friend: {
           select: {
             id: true,
             avatar: true,
@@ -40,7 +40,7 @@ router.get("/", async (req: Request, res: Response) => {
       },
     });
     //攤平
-    const users = data.map((f) => f.User);
+    const users = data.map((f) => f.Friend);
     return res.status(200).json({ success: true, data: users });
   } catch (err) {
     console.log(err);
@@ -104,7 +104,21 @@ router.get("/allmessage", async (req: Request, res: Response) => {
         userId: payload.user_id,
       },
       include: {
-        Room: true,
+        Room: {
+          include: {
+            Members: {
+              include: {
+                User: {
+                  select: {
+                    id: true,
+                    nickname: true,
+                    avatar: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
     // console.log("rooms=>", rooms);
@@ -113,15 +127,29 @@ router.get("/allmessage", async (req: Request, res: Response) => {
     const allRoomsLatestMessages = await Promise.all(
       rooms.map(async (room) => {
         const roomLatestMessage = await prisma.message.findFirst({
-          where: { senderId: payload.user_id, roomId: room.roomId },
+          where: { roomId: room.roomId },
           select: {
             content: true,
+            senderId: true,
+            createdAt: true,
           },
           orderBy: {
             createdAt: "desc",
           },
         });
-        return { roomData: room.Room, LatestMessage: roomLatestMessage };
+        
+        // 整理房間成員資訊
+        const members = room.Room.Members.map((m) => m.User);
+        
+        return {
+          roomData: {
+            id: room.Room.id,
+            roomName: room.Room.roomName,
+            createdAt: room.Room.createdAt,
+          },
+          members: members, // 所有房間成員
+          LatestMessage: roomLatestMessage,
+        };
       })
     );
 
