@@ -86,6 +86,9 @@ model City {
   id   Int    @id @default(autoincrement()) @map("city_id")
   name String @unique
 
+  // m2
+  TripPlans TripPlan[] @relation("TripPlanToCity")
+
   // m3
   Accommodations Accommodation[]
 
@@ -197,10 +200,20 @@ model MessageBoard {
 // ----------------------------------------------------------------------
 // ----------------- TripPlan  -----------------
 model TripPlan {
-  id        Int      @id @default(autoincrement()) @map("trip_plan_id")
-  userId    Int      @map("user_id")
-  title     String
-  area      String
+  id     Int     @id @default(autoincrement()) @map("trip_plan_id")
+  userId Int     @map("user_id")
+  title  String
+  area   String
+  type   String? // 行程類型（獨旅/朋友/情侶/家族）
+
+  // ✅ 目的地外鍵：關聯 City
+  destinationId Int?  @map("destination_id")
+  Destination   City? @relation("TripPlanToCity", fields: [destinationId], references: [id], onDelete: SetNull)
+
+  // ✅ 多對多關聯 (景點 / 住宿)
+  Places         TripPlanPlace[]
+  Accommodations TripPlanAccommodation[]
+
   startDate DateTime @map("start_date")
   endDate   DateTime @map("end_date")
   url       String   @map("image_url")
@@ -213,10 +226,35 @@ model TripPlan {
   User           User             @relation(fields: [userId], references: [id])
   Expense        Expense[]
   TripPlanDetail TripPlanDetail[]
-
-  PackingItem PackingItem[]
+  PackingItem    PackingItem[]
 
   @@map("trip_plans")
+}
+
+// --------- 行程內包含的景點 ----------
+model TripPlanPlace {
+  id         Int @id @default(autoincrement()) @map("trip_plan_place_id")
+  tripPlanId Int @map("trip_plan_id")
+  placeId    Int @map("place_id")
+
+  TripPlan TripPlan @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+  Place    Place    @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  @@unique([tripPlanId, placeId]) // 一個行程同一景點只能加一次
+  @@map("trip_plan_places")
+}
+
+// ------------- 行程內住宿清單 -----------
+model TripPlanAccommodation {
+  id              Int @id @default(autoincrement()) @map("trip_plan_accommodation_id")
+  tripPlanId      Int @map("trip_plan_id")
+  accommodationId Int @map("accommodation_id")
+
+  TripPlan      TripPlan      @relation(fields: [tripPlanId], references: [id], onDelete: Cascade)
+  Accommodation Accommodation @relation(fields: [accommodationId], references: [id], onDelete: Cascade)
+
+  @@unique([tripPlanId, accommodationId])
+  @@map("trip_plan_accommodations")
 }
 
 // ----------------- TripPlanList  -----------------
@@ -224,7 +262,7 @@ model TripPlan {
 model TripPlanList {
   id        Int        @id @default(autoincrement()) @map("trip_plan_list_id")
   userId    Int        @map("user_id")
-  avatar    String?
+  avatar    String? //封面照
   TripPlans TripPlan[]
 
   @@map("trip_plan_lists")
@@ -236,7 +274,7 @@ model TripPlanDetail {
   TripPlanId Int      @map("trip_plan_id")
   userId     Int      @map("user_id")
   title      String
-  order      Int
+  order      Int //行程拖曳編輯
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
   address    String
@@ -285,8 +323,8 @@ model Expense {
   amount      Float //Double
   typeId      Int?     @map("type_id") // 可為 null
   area        String?
-  expenseDate DateTime @default(now()) @map("expense_date")
-  createdAt   DateTime @default(now()) @map("created_at")
+  expenseDate DateTime @default(now()) @map("expense_date") //前端顯示日期
+  createdAt   DateTime @default(now()) @map("created_at") //資料庫顯示
   isChecked   Boolean  @default(false) @map("is_checked") //for刪除給API使用 
 
   User     User         @relation(fields: [userId], references: [id])
@@ -344,13 +382,14 @@ model Accommodation {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  Contacts  Contact[]
-  RoomTypes RoomType[]
-  Reviews   Review[]
-  Favorites FavoriteAccommodation[]
-  Amenities AccommodationAmenity[]
-  Bookings  Booking[]
-  Images    AccommodationImage[]
+  Contacts               Contact[]
+  RoomTypes              RoomType[]
+  Reviews                Review[]
+  Favorites              FavoriteAccommodation[]
+  Amenities              AccommodationAmenity[]
+  Bookings               Booking[]
+  Images                 AccommodationImage[]
+  TripPlanAccommodations TripPlanAccommodation[]
 
   @@index([cityId])
   @@map("accommodations")
@@ -597,12 +636,13 @@ model Place {
   City   City? @relation(fields: [cityId], references: [id], onDelete: SetNull)
 
   // 🔹 回指關聯
-  Photos       PlacePhoto[]
-  Favorites    Favorite[]
-  Comments     Comment[]
-  Ranks        Rank[]
-  Histories    History[]
-  OpeningHours OpeningHour[]
+  Photos         PlacePhoto[]
+  Favorites      Favorite[]
+  Comments       Comment[]
+  Ranks          Rank[]
+  Histories      History[]
+  OpeningHours   OpeningHour[]
+  TripPlanPlaces TripPlanPlace[]
 
   // 🔹 索引
   @@index([type, region])
