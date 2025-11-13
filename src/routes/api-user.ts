@@ -1,7 +1,7 @@
 import express from "express";
 import type { Request, Response } from "express";
 import { prisma } from "../utils/prisma-pagination.js";
-import upload from "../utils/upload-images.js";
+import upload from "../utils/upload-images-avatar.js";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
