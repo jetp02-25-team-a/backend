@@ -143,3 +143,18 @@ vite.config.ts.timestamp-*
 
 
 /src/generated/prisma
+public/itineraries_photo/4c554a4b-5b39-43f3-9ca0-7544c3a2317cMon Nov 10 2025 11:53:34 GMT+0800 (台北標準時間).jpeg
+public/itineraries_photo/5bf78a3a-05e8-4324-b56f-00994be7fb4fMon Nov 10 2025 11:53:41 GMT+0800 (台北標準時間).jpg
+public/itineraries_photo/7d1610d9-36a0-4f5a-b2a7-bf5c30c7f080.jpg
+public/itineraries_photo/8a00fb1f-b6b6-400e-a471-c0b9c6675380Mon Nov 10 2025 11:46:08 GMT+0800 (台北標準時間).jpeg
+public/itineraries_photo/8ba87ea2-40a0-4ae0-ad01-0bce46edab16Mon Nov 10 2025 11:38:04 GMT+0800 (台北標準時間).jpg
+public/itineraries_photo/8d4ffe41-820f-4409-8d3f-b277ea2a43c8.jpeg
+public/itineraries_photo/08f29a40-ea9a-49dc-a3f4-aee2774bbf80.jpeg
+public/itineraries_photo/16a75692-b179-4828-845e-e304369c53faMon Nov 10 2025 11:52:34 GMT+0800 (台北標準時間).jpeg
+public/itineraries_photo/91ba79e6-29c4-479e-ad70-ed97ee6fdeaaMon Nov 10 2025 11:53:30 GMT+0800 (台北標準時間).jpg
+public/itineraries_photo/529b9323-10f7-42d3-92ff-c4969ad847dd.jpg
+public/itineraries_photo/817ae65b-b9db-446d-8853-6f5d689e0861.jpeg
+public/itineraries_photo/040285d2-c7cd-466f-91c3-bd573b7e8837Mon Nov 10 2025 11:53:32 GMT+0800 (台北標準時間).jpeg
+public/itineraries_photo/b0890002-2f91-453c-9e13-64f5eb34836a.jpeg
+public/itineraries_photo/dbf3833a-9ba1-4276-b641-9729eb00ee25Mon Nov 10 2025 11:53:46 GMT+0800 (台北標準時間).jpg
+.gitignore

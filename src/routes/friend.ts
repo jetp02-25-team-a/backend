@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import { json, success } from "zod";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { prisma } from "../utils/prisma-pagination";
+import { ca } from "zod/v4/locales";
 //friendships<= 路徑
 const router = express.Router();
 
@@ -37,11 +38,18 @@ router.get("/", async (req: Request, res: Response) => {
         userId: payload.user_id,
       },
       select: {
-        friendId: true,
-        createdAt: true,
+        User: {
+          select: {
+            id: true,
+            avatar: true,
+            nickname: true,
+          },
+        },
       },
     });
-    return res.status(200).json({ success: true, data: data });
+    //攤平
+    const users = data.map((f) => f.User);
+    return res.status(200).json({ success: true, data: users });
   } catch (err) {
     console.log(err);
   }
@@ -81,7 +89,12 @@ router.get("/allmessage", async (req: Request, res: Response) => {
               { senderId: f.friendId, receiverId: payload.user_id },
             ],
           },
-          select: { content: true },
+          select: {
+            content: true,
+            isRead: true,
+            senderId: true,
+            receiverId: true,
+          },
           orderBy: {
             createdAt: "desc", //搭配findFirst ＝ 找到最新
           },
@@ -121,6 +134,54 @@ router.get("/allmessage", async (req: Request, res: Response) => {
 
     const data = { allRoomsLatestMessages, allFriendLatestMessage };
     return res.json({ success: true, data: data });
+  } catch (err) {
+    console.log(err);
+  }
+});
+
+router.get("/userinfo", async (req: Request, res: Response) => {
+  const { userId } = req.query;
+  console.log("userId=>", userId);
+  try {
+    if (!userId) return;
+    const result = await prisma.user.findFirst({
+      where: {
+        id: +userId,
+      },
+      include: {
+        Posts: true,
+        Favorites: true,
+        FriendshipsFriend: {
+          where: { status: 1 },
+          include: {
+            User: {
+              select: {
+                avatar: true,
+                nickname: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    res.status(200).json({ success: true, data: result });
+  } catch (err) {
+    console.log(err);
+  }
+});
+
+router.post("/add", async (req: Request, res: Response) => {
+  const payload = decodeToken(req);
+  if (!payload) return;
+  const { friendId } = req.body;
+  try {
+    await prisma.friendship.create({
+      data: {
+        userId: payload?.user_id as number,
+        friendId: friendId,
+      },
+    });
+    res.status(200).json({ success: true, message: "訊息已送出" });
   } catch (err) {
     console.log(err);
   }

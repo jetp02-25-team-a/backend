@@ -20,6 +20,7 @@ import featuredRouter from "./routes/place-features";
 import searchRouter from "./routes/place-search";
 import articleRouter from "./routes/article.routes";
 import mallRouter from "./routes/api-mall";
+import itinerariesRouter from "./routes/itineraries";
 
 import { m3AccommodationsRoute, m3Favorite } from "./routes/m3";
 
@@ -58,6 +59,7 @@ app.use(cors(corsOptions));
 
 // 設定靜態內容資料夾
 app.use(express.static("public"));
+
 // 解析 JSON body 的中間件
 app.use(express.json());
 // 解析 URL-encoded body 的中間件
@@ -110,6 +112,7 @@ app.use("/api/place/featured", featuredRouter);
 app.use("/api/place/search", searchRouter);
 app.use("/api/place", placeRouter);
 app.use("/api/article", articleRouter);
+app.use("/api/itineraries", itinerariesRouter);
 
 //m3 routes
 app.use("/api/m3", m3AccommodationsRoute);
