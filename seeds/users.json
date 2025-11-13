@@ -6,7 +6,8 @@
     "nickname": "Admin",
     "description": "系統管理員帳號，擁有最高權限。",
     "point": 99999,
-    "safety": 1
+    "safety": 1,
+    "avatar": "avatars/avatar.0000.jpg"
   },
   {
     "email": "user@test.com",
@@ -15,6 +16,7 @@
     "nickname": "TestUser",
     "description": "一般測試用戶帳號。",
     "point": 1000,
-    "safety": 0
+    "safety": 0,
+    "avatar": "avatars/avatar.0000.jpg"
   }
 ]

@@ -27,10 +27,10 @@ const AMENITIES_JSON_PATH = path.join(process.cwd(), "seeds", "amenities.json");
 const USERS_JSON_PATH = path.join(process.cwd(), "seeds", "users.json");
 
 // 數據量配置
-const USER_COUNT_FAKER = 50; // 額外生成的 Faker 用戶數量
-const ACCOMMODATION_COUNT = 30;
-const ROOM_TYPE_PER_ACCOMMODATION = 3;
-const NUM_BOOKINGS = 40;
+const USER_COUNT_FAKER = 100; // 額外生成的 Faker 用戶數量
+const ACCOMMODATION_COUNT = 200;
+const ROOM_TYPE_PER_ACCOMMODATION = 5;
+const NUM_BOOKINGS = 1000;
 
 // 儲存已建立資料的 ID 列表，用於建立關聯
 let cities: { id: number; name: string }[] = [];
@@ -111,6 +111,29 @@ const accommodationSuffixMap = {
   奢華帳篷: { baseNames: ["奢華", "頂級", "精緻", "高級"], suffix: "帳篷營地" },
 };
 
+function generateRandomImagePath(
+  pathPrefix: string,
+  minRange: number,
+  maxRange: number,
+  paddingLength = 4
+) {
+  // 1. 隨機生成一個介於 minRange 到 maxRange 之間的整數
+  const min = Math.ceil(minRange); // 確保是整數
+  const max = Math.floor(maxRange); // 確保是整數
+
+  // 隨機數生成公式
+  const randomNumber = Math.floor(Math.random() * (max - min + 1)) + min;
+
+  // 2. 將數字格式化並補零
+  const paddedNumber = String(randomNumber).padStart(paddingLength, "0");
+
+  // 3. 組合相對路徑
+  // 假設所有檔案都是 .jpg 格式
+  const relativePath = `${pathPrefix}.${paddedNumber}.jpg`;
+
+  return relativePath;
+}
+
 // -----------------------------------------------------------
 // Ⅰ. 基礎靜態資料 Seeding (JSON 匯入 - 已修正 TypeScript 錯誤)
 // -----------------------------------------------------------
@@ -125,12 +148,10 @@ const accommodationSuffixMap = {
 async function seedStaticData(
   modelName: string,
   jsonPath: string,
-  deleteFunc: () => Promise<any>,
   saveIdsTo: (ids: number[]) => void,
   selectField: string
 ) {
   console.log(`--- 正在填充 ${modelName} (JSON) ---`);
-  await deleteFunc();
 
   let data: any[];
   try {
@@ -190,7 +211,6 @@ async function seedAllStaticData() {
   await seedStaticData(
     "AccommodationType",
     ACCOMMODATION_TYPES_JSON_PATH,
-    () => prisma.accommodationType.deleteMany(),
     (ids) => (typeIds = ids),
     "name"
   );
@@ -198,7 +218,6 @@ async function seedAllStaticData() {
   await seedStaticData(
     "Amenity",
     AMENITIES_JSON_PATH,
-    () => prisma.amenity.deleteMany(),
     (ids) => (amenityIds = ids),
     "name"
   );
@@ -252,6 +271,7 @@ async function seedUsers() {
       description: faker.lorem.sentences(2),
       point: faker.number.int({ min: 100, max: 5000 }),
       safety: faker.helpers.arrayElement([0, 0, 0, 1]),
+      avatar: generateRandomImagePath("avatars/avatar", 1, 100),
     });
   }
 
@@ -330,6 +350,7 @@ async function seedAccommodations() {
     const sentence1 = faker.word.words({ count: { min: 8, max: 12 } }); // 描述地點和氛圍
     const sentence2 = faker.word.words({ count: { min: 15, max: 25 } }); // 描述特色和服務
     const sentence3 = faker.word.words({ count: { min: 5, max: 8 } }); // 總結或行動呼籲
+    const sentence4 = faker.lorem.sentence({ min: 8, max: 12 });
 
     // 2. 組合句子並加入標點符號，使其看起來像簡介 (約 60-100 字)
     const description = `
@@ -417,24 +438,25 @@ async function seedAccommodationDetails() {
 
     // Images
     const imageLinks = [];
-    for (let i = 0; i < 4; i++) {
+    // 1. 決定隨機的張數 (例如隨機 1 到 12 張)
+    const numImagesToGenerate = Math.floor(Math.random() * (12 - 1 + 1)) + 1;
+
+    // 2. 使用隨機張數來控制迴圈
+    for (let i = 0; i < numImagesToGenerate; i++) {
+      // 這裡會是 1 到 12
       imageLinks.push({
         accommodationId: accId,
-        url: faker.image.urlLoremFlickr({
-          category: "hotel",
-          width: 640,
-          height: 480,
-        }),
+        url: generateRandomImagePath("accommodations/acc", 1, 1000),
         caption: `照片 ${i + 1}`,
         isPrimary: i === 0,
       });
     }
     await prisma.accommodationImage.createMany({ data: imageLinks });
 
-    // Amenities (隨機 4-8 個設施)
+    // Amenities (隨機 8-12 個設施)
     const randomAmenities = faker.helpers.arrayElements(amenityIds, {
-      min: 4,
-      max: 8,
+      min: 8,
+      max: 12,
     });
     const amenityLinks = randomAmenities.map((amenityId) => ({
       accommodationId: accId,
@@ -526,6 +548,115 @@ async function seedRoomTypesAndAmenities() {
         "晚上可鋪設三張日式床墊，感受在地文化。",
       ],
     },
+    // --- 新增房型 ---
+    {
+      name: "背包客床位",
+      capacity: 1,
+      bedType: "單人上下舖",
+      minPrice: 500,
+      maxPrice: 1200,
+      descriptionTemplate: [
+        "經濟實惠的單人床位，適合預算有限的旅人。",
+        "共用衛浴和公共空間，結識世界各地的朋友。",
+        "每個床位皆有獨立閱讀燈與插座。",
+      ],
+    },
+    {
+      name: "豪華雙床房",
+      capacity: 2,
+      bedType: "兩張加大單人床",
+      minPrice: 5500,
+      maxPrice: 11000,
+      descriptionTemplate: [
+        "升級版的雙床配置，提供更寬敞的睡眠區域。",
+        "適合重視個人空間的高級商務人士。",
+        "配備高品質寢具，確保一夜好眠。",
+      ],
+    },
+    {
+      name: "主題親子房",
+      capacity: 4,
+      bedType: "一張雙人床與一張上下舖",
+      minPrice: 8000,
+      maxPrice: 14000,
+      descriptionTemplate: [
+        "充滿童趣的主題設計，讓孩子們驚喜連連。",
+        "設有遊戲區和兒童專屬備品，享受歡樂時光。",
+        "一家四口同住，創造美好的家庭回憶。",
+      ],
+    },
+    {
+      name: "總統套房",
+      capacity: 4,
+      bedType: "兩張特大床 (King)",
+      minPrice: 25000,
+      maxPrice: 60000,
+      descriptionTemplate: [
+        "極致奢華的住宿體驗，擁有私人管家服務。",
+        "寬闊的空間，包含獨立餐廳與會議區。",
+        "俯瞰城市天際線的絕美景觀。",
+      ],
+    },
+    {
+      name: "小型公寓房",
+      capacity: 2,
+      bedType: "大床 (Queen)",
+      minPrice: 4500,
+      maxPrice: 7500,
+      descriptionTemplate: [
+        "配備簡易廚房和餐具，適合長期住宿。",
+        "體驗像家一樣的溫馨舒適。",
+        "設有洗衣機，解決長途旅行的洗衣需求。",
+      ],
+    },
+    {
+      name: "私人溫泉房",
+      capacity: 2,
+      bedType: "大床 (Queen)",
+      minPrice: 9000,
+      maxPrice: 18000,
+      descriptionTemplate: [
+        "在房內即可享受天然溫泉浴，徹底放鬆身心。",
+        "私人溫泉池位於獨立陽台，保有絕對隱私。",
+        "享受日式禪意的氛圍與服務。",
+      ],
+    },
+    {
+      name: "典雅三人房",
+      capacity: 3,
+      bedType: "一張雙人床與一張單人床",
+      minPrice: 5000,
+      maxPrice: 9500,
+      descriptionTemplate: [
+        "專為三人團體設計，兼具獨立與共享空間。",
+        "適合小家庭或三位好友共同入住。",
+        "房間佈局優雅，提供充足的休息空間。",
+      ],
+    },
+    {
+      name: "湖景木屋別墅",
+      capacity: 6,
+      bedType: "三張雙人床",
+      minPrice: 15000,
+      maxPrice: 35000,
+      descriptionTemplate: [
+        "獨立的兩層樓木屋別墅，坐擁絕美湖景。",
+        "設有獨立客廳、餐廳和戶外燒烤區。",
+        "最適合多家庭或大型團體入住，體驗戶外奢華。",
+      ],
+    },
+    {
+      name: "寵物友善雙人房",
+      capacity: 2,
+      bedType: "大床 (Queen)",
+      minPrice: 3500,
+      maxPrice: 7000,
+      descriptionTemplate: [
+        "專為攜帶寵物的旅客設計，備有寵物專屬備品。",
+        "房間地點鄰近戶外活動區，方便帶寵物散步。",
+        "入住前請詳閱寵物住宿相關規定。",
+      ],
+    },
   ];
 
   for (const accId of accommodationIds) {
@@ -537,7 +668,7 @@ async function seedRoomTypesAndAmenities() {
       const basePrice = faker.number.float({
         min: config.minPrice,
         max: config.maxPrice,
-        fractionDigits: 2,
+        fractionDigits: 0,
       });
 
       // 🌟 修正點 3: 根據配置產生更相關的描述
@@ -561,8 +692,8 @@ async function seedRoomTypesAndAmenities() {
 
       // 建立 RoomType Amenities (隨機 1-3 個設施)
       const randomAmenities = faker.helpers.arrayElements(amenityIds, {
-        min: 1,
-        max: 3,
+        min: 3,
+        max: 6,
       });
       const amenityLinks = randomAmenities.map((amenityId) => ({
         roomTypeId: roomType.id,
@@ -580,6 +711,10 @@ async function seedRoomTypesAndAmenities() {
 
 /** 8. 填充 Booking 和 Review */
 async function seedBookingsAndReviews() {
+  // 定義目標時間窗的邊界
+  const WINDOW_START_DATE = "2025-10-01T00:00:00.000Z";
+  const WINDOW_END_DATE = "2026-04-01T00:00:00.000Z"; // 2025-10-01 起的六個月後
+
   if (userIds.length === 0 || roomTypeIds.length === 0) return;
 
   await prisma.review.deleteMany();
@@ -596,15 +731,33 @@ async function seedBookingsAndReviews() {
     });
     if (!roomType) continue;
 
-    // 模擬入住/退房日期 (確保入住日期在退房日期之前)
-    const checkInDate = faker.date.recent({ days: 365, refDate: "2025-01-01" });
-    const checkOutDate = faker.date.future({
-      years: 0.02,
-      refDate: checkInDate,
+    // 模擬入住日期 (在 2025-10-01 到 2026-04-01 之間隨機選擇)
+    const checkInDate = faker.date.between({
+      from: WINDOW_START_DATE,
+      to: WINDOW_END_DATE,
     });
+
+    // 模擬退房日期 (在入住日期之後，且不超過 2026-04-01)
+    const checkOutDate = faker.date.between({
+      from: checkInDate,
+      to: WINDOW_END_DATE,
+    });
+
+    // 確保 checkOutDate 至少比 checkInDate 晚一天，避免當天入住當天退房
+    // 注意：faker.date.between 已經保證了 from <= to。這裡額外加入邏輯確保至少一晚的住宿。
+    if (checkInDate.getTime() === checkOutDate.getTime()) {
+      // 如果隨機結果相同，強制讓 checkOutDate 晚一天 (86400000 毫秒 = 1天)
+      checkOutDate.setDate(checkOutDate.getDate() + 1);
+      // 再次檢查是否超過時間窗，如果超過則忽略此筆資料或調整
+      if (checkOutDate > new Date(WINDOW_END_DATE)) continue;
+    }
+
+    // 假設住宿天數為 2 晚，或其他隨機天數
+    // const stayDurationDays = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
     const quantity = faker.number.int({ min: 1, max: 3 });
     const unitPrice = parseFloat(roomType.basePrice.toString());
-    const totalAmount = unitPrice * quantity * 2; // 假設住了兩晚
+    // 為了簡化 totalAmount 計算，這裡假設一個簡單的乘數（例如 2 晚），但更好的做法是使用實際天數。
+    const totalAmount = unitPrice * quantity * 2;
 
     const booking = await prisma.booking.create({
       data: {
@@ -648,7 +801,9 @@ async function seedBookingsAndReviews() {
     }
   }
 
-  console.log(`✅ ${NUM_BOOKINGS} 筆 Booking 和相關 Review 資料填充完成。`);
+  console.log(
+    `✅ ${NUM_BOOKINGS} 筆 Booking (2025-10-01 至 2026-04-01 範圍內) 和相關 Review 資料填充完成。`
+  );
 }
 
 /** 9. 填充 FavoriteAccommodation */
@@ -664,7 +819,7 @@ export async function seedFavorites() {
   const favorites: { userId: number; accommodationId: number }[] = [];
 
   for (const accommodation of accommodations) {
-    const maxFavorites = Math.floor(Math.random() * 5) + 1; // 每筆住宿最多被 1~5 人收藏
+    const maxFavorites = Math.floor(Math.random() * 20) + 1; // 每筆住宿最多被 1~5 人收藏
     const sampledUsers = getRandomSubset(users, maxFavorites);
 
     for (const user of sampledUsers) {
@@ -692,11 +847,50 @@ function getRandomSubset<T>(array: T[], count: number): T[] {
 }
 
 // -----------------------------------------------------------
+// Ⅵ. 資料庫清除函數 (按外鍵順序)
+// -----------------------------------------------------------
+
+/**
+ * ⚠️ 清除所有資料庫表格中的資料。
+ * 必須嚴格按照 外鍵依賴的反向順序 進行刪除 (從子到父)。
+ */
+async function clearDatabase() {
+  console.log("🔥 開始清除所有現有資料 (按外鍵依賴順序)...");
+
+  // 1. 交易/關聯層 (引用 Booking, RoomType, User, Accommodation)
+  await prisma.review.deleteMany(); // 引用 Booking, User, Accommodation
+  await prisma.bookingItem.deleteMany(); // 引用 Booking, RoomType
+  await prisma.booking.deleteMany(); // 引用 User, Accommodation
+  await prisma.roomTypeAmenity.deleteMany(); // 引用 RoomType, Amenity
+  await prisma.favoriteAccommodation.deleteMany(); // 引用 User, Accommodation
+
+  // 2. 住宿細節層 (引用 Accommodation)
+  await prisma.contact.deleteMany();
+  await prisma.accommodationImage.deleteMany();
+  await prisma.accommodationAmenity.deleteMany(); // 引用 Amenity (但 Amenity 沒有引用其他表格)
+
+  // 3. 主要實體層
+  await prisma.roomType.deleteMany(); // 引用 Accommodation
+  await prisma.accommodation.deleteMany(); // 引用 City, AccommodationType
+
+  // 4. 核心/基礎層 (不被其他表格引用)
+  await prisma.user.deleteMany();
+  await prisma.amenity.deleteMany();
+  await prisma.accommodationType.deleteMany();
+  await prisma.city.deleteMany();
+
+  console.log("✅ 所有資料表清除完成。");
+}
+
+// -----------------------------------------------------------
 // Ⅴ. 主執行函數
 // -----------------------------------------------------------
 
 async function main() {
   console.log("🚀 開始執行完整的 Seeding 流程 (JSON 靜態 + Faker 動態)...");
+
+  // 清空
+  await clearDatabase();
 
   // 步驟 Ⅰ: 基礎靜態資料 (JSON 匯入)
   await seedAllStaticData();
