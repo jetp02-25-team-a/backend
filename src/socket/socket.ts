@@ -28,6 +28,7 @@ export const chatSocket = (io: Server) => {
 
     // 接收訊息
     socket.on("chat", async (msg, callback) => {
+      let savedMessage;
       //收到訊息: { providerId: 4, acceptId: 7, content: 'wwwww' }
       try {
         //房間處理
@@ -40,6 +41,7 @@ export const chatSocket = (io: Server) => {
               messageType: "text",
             },
           });
+          savedMessage = message;
         } else {
           //處理個人
           const message = await prisma.message.create({
@@ -50,13 +52,15 @@ export const chatSocket = (io: Server) => {
               messageType: "text",
             },
           });
+          savedMessage = message;
+          console.log("收到！！！個人訊息已儲存:", message);
         }
-        // }
-        // catch (err) {
-        //   console.log(err);
-        // }
-
-        io.emit("public", msg); // 廣播給所有連線者
+        io.emit("public", savedMessage); // 廣播給所有連線者
+        //發送給前端觸發重新取得訊息
+        io.emit("newMessage", {
+          roomId: msg.roomId,
+          friendId: msg.acceptId,
+        });
 
         //  回傳成功訊息給前端 (這會觸發前端的 callback)
         if (callback) callback({ success: true, message: "訊息已送出" });

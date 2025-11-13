@@ -44,7 +44,16 @@ router.get("/allmessage", async (req: Request, res: Response) => {
           createdAt: true,
           updatedAt: true,
           receiverId: true,
-          senderId: true,
+          Sender: {
+            select: {
+              id: true,
+              avatar: true,
+              nickname: true,
+            },
+          },
+        },
+        orderBy: {
+          updatedAt: "asc",
         },
       });
     }
