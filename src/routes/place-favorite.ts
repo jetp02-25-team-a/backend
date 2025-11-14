@@ -113,8 +113,8 @@ router.post("/", async (req, res) => {
 // 取消收藏
 router.delete("/:placeId", async (req, res) => {
   try {
-    const userId = Number(req.query?.userId);
-    const placeId = Number(req.params?.placeId);
+    const userId = Number(req.body?.userId);
+    const placeId = Number(req.body?.placeId);
     if (!userId || !placeId) {
       return res
         .status(400)
