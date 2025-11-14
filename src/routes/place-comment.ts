@@ -6,14 +6,15 @@ import {
   updateComment,
   deleteComment,
   getUserCommentForPlace,
+  deleteReview,
 } from "../services/comment";
 
 // ★ 這行很關鍵：讓子路由吃得到父層的 :id
 const router = Router({ mergeParams: true });
 
 /** POST /places/:id/comments  新增留言 */
-router.post("/", async (req, res) => {
-  const placeId = Number(req.params.id);
+router.post("/:placeId/comments", async (req, res) => {
+  const placeId = Number(req.params.placeId);
   if (!Number.isInteger(placeId)) {
     return res
       .status(400)
@@ -59,8 +60,8 @@ router.post("/", async (req, res) => {
 });
 
 /** PATCH /places/:id/comments/:commentId  更新留言 */
-router.patch("/:commentId", async (req, res) => {
-  const placeId = Number(req.params.id);
+router.patch("/:placeId/comments/:commentId", async (req, res) => {
+  const placeId = Number(req.params.placeId);
   const commentId = Number(req.params.commentId);
   if (!Number.isInteger(placeId) || !Number.isInteger(commentId)) {
     return res
@@ -94,24 +95,24 @@ router.patch("/:commentId", async (req, res) => {
   res.json({ success: true, data: updated });
 });
 
-/** DELETE /places/:id/comments/:commentId  刪除留言 */
-router.delete("/:commentId", async (req, res) => {
-  const placeId = Number(req.params.id);
+/** DELETE /places/:id/comments/:commentId  刪除留言和評分 */
+router.delete("/:placeId/comments/:commentId", async (req, res) => {
+  const placeId = Number(req.params.placeId);
   const commentId = Number(req.params.commentId);
-  if (!Number.isInteger(placeId) || !Number.isInteger(commentId)) {
-    return res
-      .status(400)
-      .json({ success: false, error: { message: "Invalid ids" } });
+
+  const rawUserId = req.headers["x-user-id"];
+  const userId = Number(rawUserId);
+
+  if (!Number.isFinite(userId) || userId <= 0) {
+    return res.status(401).json({
+      success: false,
+      error: "Missing or invalid x-user-id header",
+    });
   }
 
-  const ok = await deleteComment(placeId, commentId);
-  if (!ok) {
-    return res
-      .status(404)
-      .json({ success: false, error: { message: "Comment not found" } });
-  }
+  await deleteReview(userId, placeId, commentId);
 
-  return res.json({ success: true, data: { id: commentId } });
+  res.json({ success: true, data: { id: commentId } });
 });
 
 export default router;
