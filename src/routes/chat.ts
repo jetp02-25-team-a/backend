@@ -65,8 +65,7 @@ router.get("/allmessage", async (req: Request, res: Response) => {
     if (roomId) {
       data = await prisma.message.findMany({
         where: {
-          senderId: payload.user_id,
-          roomId: +roomId, //轉number
+          roomId: +roomId, //只需要 roomId，不需要過濾 senderId
         },
         select: {
           content: true,
@@ -81,6 +80,9 @@ router.get("/allmessage", async (req: Request, res: Response) => {
               avatar: true,
             },
           },
+        },
+        orderBy: {
+          updatedAt: "asc",
         },
       });
     }
@@ -141,17 +143,25 @@ router.get("/messages/room/:roomId", async (req: Request, res: Response) => {
         receiverId: true,
         content: true,
         createdAt: true,
+        updatedAt: true,
         senderId: true,
+        Sender: {
+          select: {
+            id: true,
+            nickname: true,
+            avatar: true,
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: "asc",
       },
     });
     console.log("messages===>", messages);
-    if (messages) {
-      res.status(200).json({ success: true, data: messages });
-    } else {
-      res.status(404).json({ success: false, message: "找不到對應的訊息" });
-    }
+    res.status(200).json({ success: true, data: messages });
   } catch (err) {
     console.log(err);
+    res.status(500).json({ success: false, message: "伺服器錯誤" });
   }
 });
 

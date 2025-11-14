@@ -4,7 +4,7 @@ import { json, object, success, tuple } from "zod";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { prisma } from "../utils/prisma-pagination";
 import moment from "moment-timezone";
-import { tr } from "zod/v4/locales";
+
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -1193,9 +1193,15 @@ router.patch("/invite", async (req: Request, res: Response) => {
       },
     });
 
-    if (!result) return;
-    //2.如果接收 將該使用者加入 user_itinerars 中
-    //0 pending 1 accpet 2 reject
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: "找不到該邀請",
+      });
+    }
+
+    //2.如果接收 將該使用者加入 user_itineraries 中
+    //0 pending 1 accept 2 reject
     if (invitationResponse === 1) {
       // 查詢行程取得 roomId
       const itinerary = await prisma.itinerary.findUnique({
@@ -1210,20 +1216,53 @@ router.patch("/invite", async (req: Request, res: Response) => {
         });
       }
 
-      // 加入行程
-      await prisma.userItinerary.create({
-        data: {
+      // 檢查是否已經加入過行程
+      const existingUserItinerary = await prisma.userItinerary.findFirst({
+        where: {
           userId: userId,
           itineraryId: result.itineraryId,
         },
       });
 
-      // 加入聊天室
-      await prisma.roomMember.create({
-        data: {
+      // 如果還沒加入，才新增
+      if (!existingUserItinerary) {
+        await prisma.userItinerary.create({
+          data: {
+            userId: userId,
+            itineraryId: result.itineraryId,
+          },
+        });
+      }
+
+      // 檢查是否已經加入過聊天室
+      const existingRoomMember = await prisma.roomMember.findFirst({
+        where: {
           roomId: itinerary.roomId,
           userId: userId,
         },
+      });
+
+      // 如果還沒加入，才新增
+      if (!existingRoomMember) {
+        await prisma.roomMember.create({
+          data: {
+            roomId: itinerary.roomId,
+            userId: userId,
+          },
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "已接受邀請並加入行程",
+      });
+    }
+
+    // 拒絕邀請的情況
+    if (invitationResponse === 2) {
+      return res.status(200).json({
+        success: true,
+        message: "已拒絕邀請",
       });
     }
 
