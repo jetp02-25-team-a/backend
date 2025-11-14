@@ -1,73 +1,56 @@
 import type { Request, Response } from "express";
-import {
-  getFavorites,
-  addFavorite,
-  deleteFavorite,
-  toggleFavorite,
-} from "../../services/m3/favorite.service";
+import { asyncWrapper, sendSuccess, ApiError } from "../../lib";
+import { favoriteService } from "../../services/m3";
 
-import { successResponse, errorResponse } from "../../utils/m3";
+export const getFavoritesAcc = asyncWrapper(
+  async (req: Request, res: Response) => {
+    // 1. 獲取用戶 ID (由 m3RequireUserLoggedIn 中間件設置)
+    const userId = req.user?.user_id;
 
-export const getFavoritesAcc = async (req: Request, res: Response) => {
-  const userId = Number(req.user!.user_id);
-  try {
-    const favorites = await getFavorites(userId);
-    res.json(successResponse(favorites));
-  } catch (error) {
-    console.error("Error fetching favorites:", error);
-    // 返回 500 伺服器錯誤，告訴客戶端操作失敗
-    res.status(500).json(errorResponse("無法獲取收藏列表，請稍後再試", 500));
+    // 理論上 m3RequireUserLoggedIn 會確保用戶存在，但此處再次檢查以確保程式碼健全
+    if (!userId) {
+      throw new ApiError("用戶驗證失敗，請重新登入", 401);
+    }
+
+    // 2. 調用服務獲取 ID 列表
+    const favoriteIds = await favoriteService.getFavorites(userId);
+
+    // 3. 回傳標準成功響應
+    sendSuccess(res, {
+      favoriteIds: favoriteIds,
+      count: favoriteIds.length,
+    });
   }
-};
+);
 
-export const addFavoriteAcc = async (req: Request, res: Response) => {
-  const userId = Number(req.user!.user_id);
-  const accId = parseInt(req.params.accId ?? "", 10);
+export const toggleFavoriteAcc = asyncWrapper(
+  async (req: Request, res: Response) => {
+    // 1. 獲取並驗證用戶 ID 和路徑參數
+    const userId = req.user?.user_id;
+    const accId = parseInt(req.params.accId, 10);
 
-  if (Number.isNaN(accId)) {
-    return res.status(400).json(errorResponse("無效的住宿 ID", 400));
-  }
+    if (!userId) {
+      throw new ApiError("用戶驗證失敗，請重新登入", 401);
+    }
 
-  const fav = await addFavorite(userId, accId);
-  res.json(successResponse(fav, "已加入收藏"));
-};
+    // 驗證 accId 格式 (如果中間件沒有做)
+    if (isNaN(accId)) {
+      throw new ApiError("住宿 ID 格式錯誤，必須為數字", 400);
+    }
 
-export const deleteFavoriteAcc = async (req: Request, res: Response) => {
-  const userId = Number(req.user!.user_id);
-  const accId = parseInt(req.params.accId ?? "", 10);
+    // 2. 調用服務執行切換邏輯 (Service 會處理 NotFoundError 拋出)
+    const isAdded = await favoriteService.toggleFavorite(userId, accId);
 
-  if (Number.isNaN(accId)) {
-    return res.status(400).json(errorResponse("無效的住宿 ID", 400));
-  }
+    // 3. 回傳標準成功響應 (根據操作結果返回不同的狀態碼)
+    const statusCode = isAdded ? 201 : 200;
 
-  try {
-    await deleteFavorite(userId, accId);
-    res.json(successResponse(null, "收藏已移除"));
-  } catch {
-    res.status(404).json(errorResponse("收藏不存在", 404));
-  }
-};
-
-export const toggleFavoriteAcc = async (req: Request, res: Response) => {
-  const userId = Number(req.user!.user_id);
-  const accId = parseInt(req.params.accId ?? "", 10);
-
-  if (Number.isNaN(accId)) {
-    return res.status(400).json(errorResponse("無效的住宿 ID", 400));
-  }
-
-  // 🌟 修正點：加入 try...catch 區塊來處理服務層錯誤
-  try {
-    const result = await toggleFavorite(userId, accId);
-    res.json(
-      successResponse(result, result.toggled ? "已加入收藏" : "已取消收藏")
+    sendSuccess(
+      res,
+      {
+        message: isAdded ? "已成功新增到收藏" : "已從收藏中移除",
+        isFavorite: isAdded,
+      },
+      statusCode
     );
-  } catch (error) {
-    console.error("Error toggling favorite status:", error);
-    // 雖然 500 是通用的伺服器錯誤，但如果服務層能提供更精確的錯誤類型
-    // 這裡可以回傳更具體的錯誤碼 (例如 404 如果 accId 不存在)
-    res
-      .status(500)
-      .json(errorResponse("收藏操作失敗，請檢查住宿 ID 或伺服器狀態", 500));
   }
-};
+);
