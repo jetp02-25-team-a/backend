@@ -70,6 +70,86 @@ export const chatSocket = (io: Server) => {
       }
     });
 
+    //行程相關
+
+    // if (!socket || !itineraryId || !user) return;
+
+    // console.log("🔌 加入行程協作房間:", itineraryId);
+
+    // 加入行程協作房間
+    socket.on("itinerary:join", (data) => {
+      const { itineraryId, userId, userName } = data;
+      const roomName = `itinerary_${itineraryId}`;
+      socket.join(roomName); // 加入特定行程房間
+      socket.data.currentItinerary = itineraryId;
+      //通知而已
+      socket.to(roomName).emit("itinerary:userJoined", { userId, userName });
+    });
+    //------------------------------------------
+    //監聽事件--node
+    //------------------------------------------
+    //
+    // 監聽其他用戶的節點增加 ＝> 收到的資訊完整發送給其他用戶
+    // socket.on("itinerary:addNode", (data) => {
+    //   const { itineraryId, dayIndex, nodeData, userId, userName, timestamp } =
+    //     data;
+    //   const roomName = `itinerary_${itineraryId}`;
+    //   socket.to(roomName).emit("itinerary:addNode", data);
+    // });
+
+    // 監聽其他用戶的節點刪除 ＝> 收到的資訊完整發送給其他用戶
+    // socket.on("itinerary:nodeDeleted", (data) => {
+    //   const { itineraryId, dayIndex, nodeData, userId, userName, timestamp } =
+    //     data;
+    //   const roomName = `itinerary_${itineraryId}`;
+    //   //發送給其他房間的使用者有節點刪除
+    //   socket.to(roomName).emit("itinerary:nodeDeleted", data);
+    // });
+    //------------------------------------------
+    //監聽事件--天數
+    //------------------------------------------
+    // 監聽其他用戶的天數新增
+    socket.on("itinerary:addDay", (data) => {
+      const { itineraryId, dayData, userId, userName, timestamp } = data;
+      console.log("收到的資料＝＝", {
+        itineraryId,
+        dayData,
+        userId,
+        userName,
+        timestamp,
+      });
+      const roomName = `itinerary_${itineraryId}`;
+      //發送給其他房間的使用者有天數新增
+      socket.to(roomName).emit("itinerary:addDay", data);
+    });
+    // 監聽其他用戶的天數刪除
+    socket.on("itinerary:deleteDay", (data) => {
+      const { itineraryId, dayIndex, userId, userName, timestamp } = data;
+      const roomName = `itinerary_${itineraryId}`;
+      //發送給其他房間的使用者有天數刪除
+      socket.to(roomName).emit("itinerary:deleteDay", data);
+    });
+
+    // 監聽用戶上線/離線
+    socket.on("itinerary:userJoined", (data) => {
+      console.log("👋 用戶加入協作:", data);
+    });
+
+    socket.on("itinerary:userLeft", (data) => {
+      console.log("👋 用戶離開協作:", data);
+    });
+
+    // 清理函數
+    // return () => {
+    //   console.log('🔌 離開行程協作房間:', itineraryId);
+    //   socket.emit('itinerary:leave', { itineraryId, userId: user.id });
+    //   socket.off('itinerary:nodeAdded');
+    //   socket.off('itinerary:nodeDeleted');
+    //   socket.off('itinerary:dayAdded');
+    //   socket.off('itinerary:userJoined');
+    //   socket.off('itinerary:userLeft');
+    // };
+
     // 使用者離線
     socket.on("disconnect", () => {
       console.log("使用者離線:", socket.id);
