@@ -1,9 +1,5 @@
-import type {
-  AccommodationListDTO,
-  SearchParams,
-  SortDirection,
-  SortType,
-} from "../../interfaces/m3";
+import type { Accommodation } from "../../generated/prisma";
+import type { AccommodationListDTO, SearchParams } from "../../interfaces/m3";
 import { prisma } from "../prisma-pagination";
 
 function normalizeTai(keyword: string): string {
@@ -35,19 +31,30 @@ export function buildAccommodationWhere(params: SearchParams) {
     ];
   }
 
-  if (params.hasUserInputDate) {
+  if (
+    params.hasUserInputDate ||
+    (params.roomTypeAmenities && params.roomTypeAmenities.length > 0)
+  ) {
     where.RoomTypes = {
       some: {
-        maxCapacity: { gte: params.guestCount ?? 1 },
-        Inventories: {
-          some: {
-            date: {
-              gte: new Date(params.checkInDate!),
-              lt: new Date(params.checkOutDate!),
+        ...(params.hasUserInputDate && {
+          maxCapacity: { gte: params.guestCount ?? 1 },
+          Inventories: {
+            some: {
+              date: {
+                gte: new Date(params.checkInDate!),
+                lt: new Date(params.checkOutDate!),
+              },
+              availableCount: { gt: 0 },
             },
-            availableCount: { gt: 0 },
           },
-        },
+        }),
+        ...(params.roomTypeAmenities &&
+          params.roomTypeAmenities.length > 0 && {
+            Amenities: {
+              some: { name: { in: params.roomTypeAmenities } },
+            },
+          }),
       },
     };
   }
@@ -62,17 +69,6 @@ export function buildAccommodationWhere(params: SearchParams) {
     };
   }
 
-  // 篩選房型設施
-  if (params.roomTypeAmenities && params.roomTypeAmenities.length > 0) {
-    where.RoomTypes = {
-      some: {
-        Amenities: {
-          some: { name: { in: params.roomTypeAmenities } },
-        },
-      },
-    };
-  }
-
   // 收藏
   if (params.favoriteIds && params.favoriteIds.length > 0) {
     where.id = { in: params.favoriteIds };
@@ -81,27 +77,7 @@ export function buildAccommodationWhere(params: SearchParams) {
   return where;
 }
 
-export function buildOrderBy(
-  sort?: SortType,
-  direction: SortDirection = "desc"
-) {
-  switch (sort) {
-    case "popular":
-      return [
-        { Favorites: { _count: direction } },
-        { id: direction }, // 保證唯一
-      ];
-    case "highRated":
-      return [
-        { Reviews: { _avg: { ratingScore: direction } } },
-        { id: direction }, // 保證唯一
-      ];
-    default:
-      return [{ id: direction }];
-  }
-}
-
-export async function attachAggregates(accommodations: any[]) {
+export async function attachAggregates(accommodations: Accommodation[]) {
   const [ratings, favorites] = await Promise.all([
     prisma.review.groupBy({
       by: ["accommodationId"],

@@ -6,19 +6,6 @@ import type {
   Review,
 } from "../../generated/prisma";
 
-// 精簡版：卡片列表用（列表/搜尋結果）
-export interface AccommodationListDTO {
-  id: number;
-  name: string;
-  city: string;
-  mainImage: string;
-  averageRating: number | null;
-  latitude: number | null;
-  longitude: number | null;
-  countFavorite: number;
-}
-
-// 詳細版：單筆住宿用（含必要關聯）
 export interface AccommodationDTO {
   id: number;
   name: string;
@@ -32,10 +19,23 @@ export interface AccommodationDTO {
   reviews?: Review[];
 }
 
-// 搜尋方向（保留擴充性）
+// 顯示卡片用
+export interface AccommodationListDTO {
+  id: number;
+  name: string;
+  city: string;
+  mainImage: string | null;
+  averageRating: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  countFavorite: number;
+}
+
+export type SortType = "popular" | "highRated";
+
+// 搜尋結果列表用
 export type SortDirection = "desc" | "asc";
 
-// 地圖框範圍
 export interface BoundingBox {
   minLat: number;
   maxLat: number;
@@ -43,7 +43,6 @@ export interface BoundingBox {
   maxLng: number;
 }
 
-// 搜尋結果用的查詢參數（僅 R 範圍）
 export interface SearchParams {
   keyword?: string;
   city?: string;
@@ -51,6 +50,8 @@ export interface SearchParams {
   checkInDate?: string;
   checkOutDate?: string;
   guestCount?: number;
+  sort?: SortType;
+  direction?: SortDirection;
   cursor?: string;
   limit?: number;
   hasUserInputDate: boolean;
@@ -60,7 +61,5 @@ export interface SearchParams {
   roomTypeAmenities?: string[]; // 房型設施
   favorites?: boolean;
   userId?: number;
-
-  // 由 favorites + userId 推導出來
   favoriteIds?: number[];
 }

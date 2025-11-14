@@ -1,53 +1,111 @@
 import { prisma } from "../../utils/prisma-pagination";
+import {
+  attachAggregates,
+  buildAccommodationWhere,
+  mapToCardDTO,
+} from "../../utils/m3";
 import type {
   AccommodationDTO,
   AccommodationListDTO,
   SearchParams,
-  SortType,
 } from "../../interfaces/m3";
-import {
-  attachAggregates,
-  buildAccommodationWhere,
-  buildOrderBy,
-  mapToCardDTO,
-} from "../../utils/m3";
-import type { AccommodationImage } from "../../generated/prisma";
 
-export const findAllAccommodations = async (filters: {
-  city?: string;
-  type?: string;
-  keyword?: string;
-}): Promise<AccommodationDTO[]> => {
-  const data = await prisma.accommodation.findMany({
-    where: {
-      City: filters.city ? { is: { name: filters.city } } : undefined,
-      accommodationType: filters.type
-        ? { is: { name: filters.type } }
-        : undefined,
-      name: filters.keyword ? { contains: filters.keyword } : undefined,
-    },
-    include: {
-      City: true,
-      accommodationType: true,
-      Images: true,
-      Contacts: true,
-    },
+// 列表查詢 (卡片)
+export async function findAccommodationsList(
+  limit = 20
+): Promise<AccommodationListDTO[]> {
+  const accommodations = await prisma.accommodation.findMany({
+    include: { City: true, Images: true },
+    take: limit,
+    orderBy: { id: "asc" },
   });
 
-  return data.map((accommodation) => ({
-    id: accommodation.id,
-    name: accommodation.name,
-    description: accommodation.description ?? undefined,
-    city: accommodation.City.name,
-    type: accommodation.accommodationType.name,
-    images: accommodation.Images,
-    contacts: accommodation.Contacts,
-  }));
-};
+  const enriched = await attachAggregates(accommodations);
+  return mapToCardDTO(enriched);
+}
 
-export const findAccommodationById = async (
+// 高星列表
+export async function findHighRatedAccommodations(
+  limit = 20
+): Promise<AccommodationListDTO[]> {
+  // 1. 執行聚合查詢：從 Review 表計算平均評分
+  const ratings = await prisma.review.groupBy({
+    by: ["accommodationId"],
+    _avg: {
+      ratingScore: true,
+    },
+    orderBy: {
+      _avg: {
+        ratingScore: "desc",
+      },
+    },
+    take: limit,
+  });
+
+  // 2. 提取排序後的 Accommodation ID 列表
+  const sortedIds = ratings.map((r) => r.accommodationId);
+
+  if (sortedIds.length === 0) return [];
+
+  // 3. 獲取完整的 Accommodation 資料
+  const accommodations = await prisma.accommodation.findMany({
+    where: { id: { in: sortedIds } },
+    include: { City: true, Images: true },
+  });
+
+  // 4. (關鍵步驟) 在 JS 層手動排序，以匹配聚合查詢的順序
+  const sortedAccommodations = sortedIds
+    .map((id) => accommodations.find((acc) => acc.id === id))
+    .filter((acc) => acc !== undefined);
+
+  // 5. 轉換為精簡卡片 DTO
+  const enriched = await attachAggregates(sortedAccommodations);
+  return mapToCardDTO(enriched);
+}
+
+// 熱門列表
+export async function findPopularAccommodations(
+  limit = 20
+): Promise<AccommodationListDTO[]> {
+  // 1. 執行聚合查詢：從 FavoriteAccommodation 表計算總收藏數
+  const favorites = await prisma.favoriteAccommodation.groupBy({
+    by: ["accommodationId"],
+    _count: {
+      id: true,
+    },
+    orderBy: {
+      _count: {
+        id: "desc",
+      },
+    },
+    take: limit,
+  });
+
+  // 2. 提取排序後的 Accommodation ID 列表
+  const sortedIds = favorites.map((f) => f.accommodationId);
+
+  if (sortedIds.length === 0) return [];
+
+  // 3. 獲取完整的 Accommodation 資料
+  const accommodations = await prisma.accommodation.findMany({
+    where: { id: { in: sortedIds } },
+    include: { City: true, Images: true },
+  });
+
+  // 4. (關鍵步驟) 在 JS 層手動排序，以匹配聚合查詢的順序
+  const sortedAccommodations = sortedIds
+    .map((id) => accommodations.find((acc) => acc.id === id))
+    .filter((acc) => acc !== undefined);
+
+  // 5. 轉換為精簡卡片 DTO
+  const enriched = await attachAggregates(sortedAccommodations);
+  return mapToCardDTO(enriched);
+}
+
+// 單筆查詢 (詳細)
+export async function findAccommodationById(
   id: number
-): Promise<AccommodationDTO | null> => {
+): Promise<AccommodationDTO | null> {
   const data = await prisma.accommodation.findUnique({
     where: { id },
     include: {
@@ -75,48 +133,12 @@ export const findAccommodationById = async (
     roomTypes: data.RoomTypes,
     reviews: data.Reviews,
   };
-};
+}
 
-// 顯示卡片用
-export const findAccommodationsList = async (
-  sort?: SortType,
-  limit = 20
-): Promise<AccommodationListDTO[]> => {
-  const accommodations = await prisma.accommodation.findMany({
-    include: {
-      City: true,
-      Images: true,
-    },
-  });
-
-  const enriched = await attachAggregates(accommodations);
-
-  // const result = enriched.map((a) => ({
-  //   id: a.id,
-  //   name: a.name,
-  //   city: a.City?.name,
-  //   mainImage:
-  //     a.Images?.find((img: AccommodationImage) => img.isPrimary)?.url ||
-  //     a.Images?.[0]?.url,
-  //   averageRating: a.averageRating,
-  //   latitude: a.latitude ?? null,
-  //   longitude: a.longitude ?? null,
-  //   countFavorite: a.countFavorite ?? 0,
-  // }));
-
-  const result = mapToCardDTO(enriched);
-
-  if (sort === "popular") {
-    result.sort((a, b) => b.countFavorite - a.countFavorite);
-  } else if (sort === "highRated") {
-    result.sort((a, b) => (b.averageRating ?? 0) - (a.averageRating ?? 0));
-  }
-
-  return result.slice(0, limit);
-};
-
-// 搜尋結果列表用
-export async function searchAccommodations(params: SearchParams) {
+// 搜尋查詢
+export async function findAccommodationsBySearch(
+  params: SearchParams
+): Promise<{ data: AccommodationListDTO[]; meta: any }> {
   if (params.favorites && params.userId) {
     const favs = await prisma.favoriteAccommodation.findMany({
       where: { userId: params.userId },
@@ -132,13 +154,9 @@ export async function searchAccommodations(params: SearchParams) {
       where,
       include: {
         City: true,
-        accommodationType: true,
         Images: true,
-        Contacts: true,
-        Amenities: true,
-        RoomTypes: true,
       },
-      orderBy: buildOrderBy(params.sort, params.direction),
+      orderBy: { id: "desc" },
     })
     .withCursor({ limit: params.limit, after: params.cursor })
     .catch(() => [[], {}]);

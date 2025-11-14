@@ -35,7 +35,13 @@ const ROOM_TYPE_PER_ACCOMMODATION = 5;
 // 定義目標時間窗的邊界 (來自原 Seeding 配置 [5])
 const WINDOW_START_DATE = "2025-10-01T00:00:00.000Z";
 const WINDOW_END_DATE = "2026-04-01T00:00:00.000Z";
-const NUM_BOOKINGS = 1000; // 數據量配置 [11]
+const DAYS_IN_WINDOW =
+  (new Date(WINDOW_END_DATE).getTime() -
+    new Date(WINDOW_START_DATE).getTime()) /
+  (1000 * 60 * 60 * 24);
+
+const BOOKINGS_PER_DAY = 50; // 每天基準訂單數量
+const NUM_BOOKINGS = BOOKINGS_PER_DAY * DAYS_IN_WINDOW;
 // 價格規則: 平日 10% 折扣
 const WEEKDAY_DISCOUNT_FACTOR = 0.9;
 
@@ -733,11 +739,10 @@ async function seedBookingsAndReviews() {
 
   // 清除舊資料
   await prisma.review.deleteMany();
-  [2, 3];
+
   await prisma.bookingItem.deleteMany();
-  [2, 3];
+
   await prisma.booking.deleteMany();
-  [2, 3];
 
   for (let i = 0; i < NUM_BOOKINGS; i++) {
     const randomAccommodationId = faker.helpers.arrayElement(accommodationIds); // 先選定住宿

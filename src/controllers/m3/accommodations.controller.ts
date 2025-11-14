@@ -1,115 +1,92 @@
 import type { Request, Response, NextFunction } from "express";
 import {
-  findAllAccommodations,
   findAccommodationById,
   findAccommodationsList,
-  searchAccommodations,
+  findAccommodationsBySearch,
+  findPopularAccommodations,
+  findHighRatedAccommodations,
 } from "../../services/m3";
+
 import {
-  accommodationQuerySchema,
-  accommodationIdSchema,
-} from "../../schemas/m3";
-import type { SortType } from "../../interfaces/m3";
+  asyncWrapper,
+  BadRequestError,
+  sendSuccess,
+  NotFoundError,
+} from "../../lib";
 
-export const getAccommodations = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const query = accommodationQuerySchema.parse(req.query);
-    const accommodations = await findAllAccommodations(query);
-    res.json(accommodations);
-  } catch (error) {
-    next(error);
+// ++++++++++++++++++++++++++++++
+
+export const listAccommodations = asyncWrapper(
+  async (req: Request, res: Response) => {
+    const accommodations = await findAccommodationsList();
+    sendSuccess(res, accommodations);
   }
-};
+);
 
-export const getAccommodationById = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { id } = accommodationIdSchema.parse(req.params);
+// 熱門列表
+export const listPopularAccommodations = asyncWrapper(
+  async (req: Request, res: Response) => {
+    const accommodations = await findPopularAccommodations();
+    sendSuccess(res, accommodations);
+  }
+);
+
+// 高星列表
+export const listHighRatedAccommodations = asyncWrapper(
+  async (req: Request, res: Response) => {
+    const accommodations = await findHighRatedAccommodations();
+    sendSuccess(res, accommodations);
+  }
+);
+
+// 搜尋列表
+export const searchAccommodations = asyncWrapper(
+  async (req: Request, res: Response) => {
+    const params = {
+      keyword: req.query.keyword as string,
+      city: req.query.city as string,
+      boundingBox: req.query.boundingBox
+        ? JSON.parse(req.query.boundingBox as string)
+        : undefined,
+      checkInDate: req.query.checkInDate as string,
+      checkOutDate: req.query.checkOutDate as string,
+      guestCount: req.query.guestCount
+        ? parseInt(req.query.guestCount as string)
+        : undefined,
+      cursor: req.query.cursor as string,
+      limit: req.query.limit ? parseInt(req.query.limit as string) : 10,
+      hasUserInputDate: !!(req.query.checkInDate && req.query.checkOutDate),
+      accommodationAmenities: req.query.accommodationAmenities
+        ? (req.query.accommodationAmenities as string).split(",")
+        : undefined,
+      roomTypeAmenities: req.query.roomTypeAmenities
+        ? (req.query.roomTypeAmenities as string).split(",")
+        : undefined,
+      favorites: req.query.favorites === "true",
+      userId: req.query.userId
+        ? parseInt(req.query.userId as string, 10)
+        : undefined,
+    };
+
+    const result = await findAccommodationsBySearch(params);
+    sendSuccess(res, result);
+  }
+);
+
+export const getAccommodationById = asyncWrapper(
+  async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id, 10);
+
+    if (isNaN(id) || id <= 0) {
+      // 假設你有一個 BadRequestError 類型
+      throw new BadRequestError("無效的住宿 ID 格式，ID 必須是正整數。");
+    }
+
     const accommodation = await findAccommodationById(id);
-    if (!accommodation) return res.status(404).json({ message: "Not found" });
-    res.json(accommodation);
-  } catch (error) {
-    next(error);
+    if (!accommodation) {
+      throw new NotFoundError("住宿不存在");
+    }
+
+    sendSuccess(res, accommodation);
   }
-};
-
-// 顯示卡片用
-export const getAccommodationList = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const sort = req.query.sort as SortType | undefined;
-
-    const accommodations = await findAccommodationsList(sort);
-    res.json(accommodations);
-  } catch (error) {
-    next(error);
-  }
-};
-
-// 搜尋結果列表用
-export const getAccommodationSearch = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const {
-      keyword,
-      city,
-      boundingBox,
-      checkInDate,
-      checkOutDate,
-      guestCount,
-      sort,
-      direction,
-      cursor,
-      limit,
-      accommodationAmenities,
-      roomTypeAmenities,
-      favorites,
-      userId,
-    } = req.query;
-
-    const hasUserInputDate =
-      typeof checkInDate === "string" &&
-      typeof checkOutDate === "string" &&
-      checkInDate.trim() !== "" &&
-      checkOutDate.trim() !== "";
-
-    const result = await searchAccommodations({
-      keyword: keyword as string,
-      city: city as string,
-      boundingBox: boundingBox ? JSON.parse(boundingBox as string) : undefined,
-      checkInDate: hasUserInputDate ? (checkInDate as string) : undefined,
-      checkOutDate: hasUserInputDate ? (checkOutDate as string) : undefined,
-      guestCount: guestCount ? parseInt(guestCount as string) : undefined,
-      sort: sort as any,
-      direction: (direction as "asc" | "desc") ?? "desc",
-      cursor: cursor as string,
-      limit: limit ? parseInt(limit as string) : 10,
-      hasUserInputDate,
-      accommodationAmenities: accommodationAmenities
-        ? (accommodationAmenities as string).split(",")
-        : undefined,
-      roomTypeAmenities: roomTypeAmenities
-        ? (roomTypeAmenities as string).split(",")
-        : undefined,
-      favorites: favorites === "true",
-      userId: userId ? parseInt(userId as string, 10) : undefined,
-    });
-
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-};
+);
