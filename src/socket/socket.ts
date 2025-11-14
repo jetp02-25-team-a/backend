@@ -76,14 +76,31 @@ export const chatSocket = (io: Server) => {
 
     // console.log("🔌 加入行程協作房間:", itineraryId);
 
-    // 加入行程協作房間
+    //------------------------------------------    // 加入行程協作房間
     socket.on("itinerary:join", (data) => {
       const { itineraryId, userId, userName } = data;
       const roomName = `itinerary_${itineraryId}`;
       socket.join(roomName); // 加入特定行程房間
       socket.data.currentItinerary = itineraryId;
-      //通知而已
+
+      // 📌 添加這行：確認加入成功
+      socket.emit("itinerary:joined", {
+        roomName,
+        itineraryId,
+        userId,
+        userName,
+      });
+
+      // 通知房間內其他用戶有新用戶加入
       socket.to(roomName).emit("itinerary:userJoined", { userId, userName });
+
+      console.log(`用戶 ${userId} 加入房間 ${roomName}`); // 添加除錯輸出
+    });
+
+    // 後端需要添加測試廣播
+    socket.on("test:broadcast", (data) => {
+      console.log("收到廣播測試:", data);
+      socket.broadcast.emit("test:broadcast", data); // 廣播給所有其他用戶
     });
     //------------------------------------------
     //監聽事件--node
@@ -128,6 +145,39 @@ export const chatSocket = (io: Server) => {
       const roomName = `itinerary_${itineraryId}`;
       //發送給其他房間的使用者有天數刪除
       socket.to(roomName).emit("itinerary:deleteDay", data);
+    });
+
+    //監聽其他用戶的node 新增
+    socket.on("itinerary:addNode", (data) => {
+      console.log("收到的node新增資料＝＝", data);
+      const { itineraryId, dayIndex, nodeData, timestamp } = data;
+
+      // const { itineraryId, dayIndex, userId, userName, timestamp } = data;
+      const roomName = `itinerary_${itineraryId}`;
+      // //發送給其他房間的使用者有node新增
+      socket.to(roomName).emit("itinerary:addNode", data);
+    });
+
+    //監聽其他用戶刪除 node
+    socket.on("itinerary:nodeDeleted", (data) => {
+      console.log("收到的node刪除資料＝＝", data);
+      const { itineraryId, dayIndex, nodeData, timestamp } = data;
+      const roomName = `itinerary_${itineraryId}`;
+      // //發送給其他房間的使用者有node刪除
+      socket.to(roomName).emit("itinerary:nodeDeleted", data);
+    });
+
+    socket.on("itinerary:nodeDragged", (data) => {
+      console.log("收到的node拖曳資料＝＝", data);
+      const roomName = `itinerary_${data.itineraryId}`;
+
+      // 確保用戶在房間內
+      if (socket.rooms.has(roomName)) {
+        socket.to(roomName).emit("itinerary:nodeDragged", data);
+        console.log(`廣播拖曳事件到房間 ${roomName}`);
+      } else {
+        console.error(`用戶不在房間 ${roomName} 內`);
+      }
     });
 
     // 監聽用戶上線/離線
