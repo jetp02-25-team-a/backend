@@ -8,22 +8,35 @@ import { ca } from "zod/v4/locales";
 const router = express.Router();
 
 function decodeToken(req: Request) {
-  const token = req.headers["authorization"];
-  //去掉前面七個字Bearer
-  //解開jwt
-  if (!token) return;
-  const result = jwt.verify(
-    token.substring(7),
-    process.env.JWT_SECRET as string
-  ) as JwtPayload;
-  return result;
+  const authHeader = req.headers["authorization"];
+  if (!authHeader || typeof authHeader !== "string") return undefined;
+  // 只接受 Authorization: Bearer <token>
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match) return undefined;
+  const token = match[1];
+
+  try {
+    const result = jwt.verify(
+      token,
+      process.env.JWT_SECRET as string
+    ) as JwtPayload;
+    return result;
+  } catch (err) {
+    // 過期或無效，一律回傳 undefined，避免拋錯讓伺服器關機
+    console.warn(
+      "JWT 驗證失敗:",
+      err instanceof Error ? err.message : "Unknown error"
+    );
+    return undefined;
+  }
 }
 
 //取得所有好友關係
 router.get("/", async (req: Request, res: Response) => {
   const payload = decodeToken(req);
   try {
-    if (!payload) return;
+    if (!payload)
+      return res.status(401).json({ success: false, message: "未授權" });
     const data = await prisma.friendship.findMany({
       where: {
         userId: payload.user_id,
@@ -51,7 +64,8 @@ router.get("/", async (req: Request, res: Response) => {
 router.get("/allmessage", async (req: Request, res: Response) => {
   const payload = decodeToken(req);
   try {
-    if (!payload) return;
+    if (!payload)
+      return res.status(401).json({ success: false, message: "未授權" });
     //1. 先找出所有好友
     const friendships = await prisma.friendship.findMany({
       where: {
