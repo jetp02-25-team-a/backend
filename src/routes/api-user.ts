@@ -112,6 +112,17 @@ router.post("/signup", async (req: Request, res: Response) => {
   //拿取資料
   const { email, password, nickname } = req.body;
 
+  const checkemail = await prisma.user.findUnique({ where: { email: email } });
+
+  if (checkemail) {
+    const response = {
+      success: false,
+      message: "重複的電子郵件",
+    };
+
+    return res.status(409).json(response);
+  }
+
   //密碼雜湊
   const password_hash = await bcrypt.hash(password, 12);
 

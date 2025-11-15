@@ -32,6 +32,7 @@ router.get("/keyword", async (req: Request, res: Response) => {
       ProductVariants: true,
       ProductPics: true,
     },
+    take: 12,
   });
 
   const response: ApiResponse = {
@@ -306,6 +307,52 @@ router.post("/checkout", upload.none(), async (req: Request, res: Response) => {
 router.post("/order", (req: Request, res: Response) => {
   console.log(req.body);
   res.send("1|OK");
+});
+
+//尋找使用者訂單
+router.get("/order", async (req: Request, res: Response) => {
+  const user_id_from_query = req.query.user_id;
+
+  if (typeof user_id_from_query !== "string") {
+    return res.status(400).send({ message: "格式錯誤" });
+  }
+
+  const user_id: number = parseInt(user_id_from_query, 10);
+
+  if (isNaN(user_id)) {
+    return res.status(400).send({ message: "格式錯誤" });
+  }
+
+  let result;
+  try {
+    result = await prisma.order.findMany({
+      where: { userId: user_id },
+      include: {
+        OrderDetails: true,
+      },
+      orderBy: { id: "desc" },
+    });
+  } catch (error) {
+    console.error("Prisma 查詢訂單發生錯誤:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "伺服器內部錯誤，無法查詢訂單。",
+    });
+  }
+
+  if (result.length === 0) {
+    return res.status(200).json({
+      success: true,
+      message: `0`,
+      data: [],
+    });
+  }
+  const response = {
+    success: true,
+    data: result,
+  };
+  res.status(200).json(response);
 });
 
 export default router;
