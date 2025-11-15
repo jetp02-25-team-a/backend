@@ -175,6 +175,37 @@ export const chatSocket = (io: Server) => {
         console.error(`用戶不在房間 ${roomName} 內`);
       }
     });
+
+    // 處理時間調整事件
+    socket.on("itinerary:timeChanged", (data) => {
+      console.log("收到時間調整資料:", data);
+      const {
+        itineraryId,
+        dayIndex,
+        nodeIndex,
+        newDuration,
+        userId,
+        userName,
+      } = data;
+      const roomName = `itinerary_${itineraryId}`;
+
+      // 確保用戶在房間內
+      if (socket.rooms.has(roomName)) {
+        // 廣播給同一房間的其他用戶（排除發送者）
+        socket.to(roomName).emit("itinerary:timeChanged", data);
+        console.log(
+          `✅ 時間調整事件已廣播到房間 ${roomName}，用戶 ${userId} 調整了節點時間為 ${newDuration} 分鐘`
+        );
+      } else {
+        console.error(
+          `❌ 用戶 ${userId} 不在房間 ${roomName} 內，無法廣播時間調整事件`
+        );
+      }
+
+      // 可選：保存到資料庫
+      // await updateNodeDuration(itineraryId, dayIndex, nodeIndex, newDuration);
+    });
+
     // 設定聊天房間id（新增）
     socket.on("joinChatRoom", (roomId) => {
       const chatRoomName = `chat_${roomId}`;
