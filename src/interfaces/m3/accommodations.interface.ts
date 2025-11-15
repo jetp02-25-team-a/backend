@@ -18,20 +18,6 @@ export interface AccommodationListDTO {
   countFavorite: number;
 }
 
-// 詳細版：單筆住宿用（含必要關聯）
-export interface AccommodationDTO {
-  id: number;
-  name: string;
-  description?: string;
-  city: string;
-  type: string;
-  images?: AccommodationImage[];
-  contacts?: Contact[];
-  amenities?: AccommodationAmenity[];
-  roomTypes?: RoomType[];
-  reviews?: Review[];
-}
-
 // 搜尋方向（保留擴充性）
 export type SortDirection = "desc" | "asc";
 
@@ -63,4 +49,62 @@ export interface SearchParams {
 
   // 由 favorites + userId 推導出來
   favoriteIds?: number[];
+}
+
+// 詳細版：單筆住宿用
+export interface AccommodationDTO {
+  id: number;
+  name: string;
+  address: string;
+  description: string | null;
+
+  latitude: number | null;
+  longitude: number | null;
+
+  checkInTime: string | null;
+  checkOutTime: string | null;
+
+  city: string;
+  type: string;
+
+  images: any[];
+  contacts: any[];
+
+  amenities: AmenityDTO[];
+
+  roomTypes: RoomTypeDTO[];
+
+  reviews: ReviewDTO[];
+}
+
+export interface AmenityDTO {
+  id: number;
+  name: string;
+  type: string;
+}
+
+export interface RoomTypeDTO {
+  id: number;
+  name: string;
+  description: string | null;
+  basePrice: number;
+  maxCapacity: number;
+  totalRooms: number;
+  bedType: string | null;
+  amenities: AmenityDTO[];
+}
+
+export interface ReviewDTO {
+  id: number;
+  ratingScore: number;
+  comment: string;
+  reviewDate: Date;
+  user: UserDTO;
+}
+
+export interface UserDTO {
+  id: number;
+  fullName: string;
+  nickname: string;
+  avatar: string | null;
 }

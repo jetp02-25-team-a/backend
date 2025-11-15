@@ -2,6 +2,7 @@ import { prisma } from "../../utils/prisma-pagination";
 import {
   attachAggregates,
   buildAccommodationWhere,
+  mapToAccommodationDTO,
   mapToCardDTO,
 } from "../../utils/m3";
 import type {
@@ -111,28 +112,53 @@ export async function findAccommodationById(
     include: {
       City: true,
       accommodationType: true,
-      Images: true,
-      Contacts: true,
-      Amenities: true,
-      RoomTypes: true,
-      Reviews: true,
+      Images: {
+        select: {
+          id: true,
+          url: true,
+          caption: true,
+          isPrimary: true,
+          sortOrder: true,
+        },
+      },
+      Contacts: {
+        select: {
+          id: true,
+          type: true,
+          value: true,
+          description: true,
+        },
+      },
+      Amenities: {
+        select: {
+          Amenity: true,
+        },
+      },
+      RoomTypes: {
+        orderBy: { maxCapacity: "asc" },
+        include: {
+          Amenities: {
+            select: {
+              Amenity: true,
+            },
+          },
+        },
+      },
+      Reviews: {
+        take: 5,
+        orderBy: { reviewDate: "desc" },
+        include: {
+          User: {
+            select: { id: true, fullName: true, nickname: true, avatar: true },
+          },
+        },
+      },
     },
   });
 
   if (!data) return null;
 
-  return {
-    id: data.id,
-    name: data.name,
-    description: data.description ?? undefined,
-    city: data.City.name,
-    type: data.accommodationType.name,
-    images: data.Images,
-    contacts: data.Contacts,
-    amenities: data.Amenities,
-    roomTypes: data.RoomTypes,
-    reviews: data.Reviews,
-  };
+  return mapToAccommodationDTO(data);
 }
 
 // 搜尋查詢
