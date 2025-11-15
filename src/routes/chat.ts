@@ -165,4 +165,50 @@ router.get("/messages/room/:roomId", async (req: Request, res: Response) => {
   }
 });
 
+// 標記個人聊天為已讀
+router.post("/mark-read-user", async (req: Request, res: Response) => {
+  const { senderId, receiverId } = req.body;
+
+  try {
+    await prisma.message.updateMany({
+      where: {
+        senderId: senderId,
+        receiverId: receiverId,
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+      },
+    });
+
+    res.status(200).json({ success: true, message: "已標記為已讀" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "伺服器錯誤" });
+  }
+});
+
+// 標記群組聊天為已讀
+router.post("/mark-read-room", async (req: Request, res: Response) => {
+  const { roomId, userId } = req.body;
+
+  try {
+    await prisma.message.updateMany({
+      where: {
+        roomId: roomId,
+        senderId: { not: userId },
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+      },
+    });
+
+    res.status(200).json({ success: true, message: "已標記為已讀" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "伺服器錯誤" });
+  }
+});
+
 export default router;
