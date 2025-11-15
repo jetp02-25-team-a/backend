@@ -4,11 +4,12 @@ import { json, object, success, tuple } from "zod";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { prisma } from "../utils/prisma-pagination";
 import moment from "moment-timezone";
-
+import { requireAuth, jwtParseMiddleware } from "../middleware/jwt";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
 import { v4 as uuidv4 } from "uuid";
+import { resolveTextToGeo } from "../services/geo";
 //<= 路徑
 const router = express.Router();
 
@@ -17,98 +18,117 @@ function decodeToken(req: Request) {
   //去掉前面七個字Bearer
   //解開jwt
   if (!token) return;
-  const result = jwt.verify(
-    token.substring(7),
-    process.env.JWT_SECRET as string
-  ) as JwtPayload;
-  return result;
+
+  try {
+    const result = jwt.verify(
+      token.substring(7),
+      process.env.JWT_SECRET as string
+    ) as JwtPayload;
+    return result;
+  } catch (err) {
+    // JWT 無效或格式錯誤,返回 undefined
+    console.warn(
+      "JWT 驗證失敗:",
+      err instanceof Error ? err.message : "Unknown error"
+    );
+    return undefined;
+  }
 }
 
 // 建立行程
-router.post("/create-itinerary", async (req: Request, res: Response) => {
-  const payload = decodeToken(req); //user_id ,
-  const { title, area, startDay, endDay, startTime, figure } = req.body;
-  console.log({ title, area, startDay, endDay, startTime, figure });
+router.post(
+  "/create-itinerary",
+  jwtParseMiddleware,
+  requireAuth,
+  async (req: Request, res: Response) => {
+    // const payload = decodeToken(req); //user_id ,
+    const userId = req.user!.user_id; // 已保證存在
+    const { title, area, startDay, endDay, startTime, figure } = req.body;
+    console.log({ title, area, startDay, endDay, startTime, figure });
 
-  try {
-    if (!payload) return;
-    // 使用交易確保建立行程、聊天室與成員一致
-    const [itinerary, room] = await prisma.$transaction([
-      prisma.itinerary.create({
-        data: {
-          userId: payload.user_id,
-          title: title,
-          area: area,
-          figure: figure,
-        },
-      }),
-      prisma.room.create({
-        data: {
-          roomName: title ? `行程: ${title}` : `Itinerary-${Date.now()}`,
-        },
-      }),
-    ]);
-
-    // 更新 itinerary 加上 roomId
-    await prisma.itinerary.update({
-      where: { id: itinerary.id },
-      data: { roomId: room.id },
-    });
-
-    // 將使用者加入 user_itineraries 與房間成員
-    await prisma.userItinerary.create({
-      data: {
-        userId: payload.user_id,
-        itineraryId: itinerary.id,
-      },
-    });
-    await prisma.roomMember.create({
-      data: {
-        roomId: room.id,
-        userId: payload.user_id,
-      },
-    });
-
-    //2.建立每日行程
-    const start = moment.tz(startDay, "Asia/Taipei"); //2025-11-10",轉亞洲本地端
-    const end = moment.tz(endDay, "Asia/Taipei");
-
-    const totalDays = end.diff(start, "days") + 1; //取得行程天數
-
-    const result = await Promise.all(
-      Array.from({ length: totalDays }).map((_, i) => {
-        // const dayDate = start.clone().add(i, "days").startOf("day"); //moment 轉 datetime 本地 UTC
-        const dayDate = start.clone().add(i, "days"); //moment 轉 datetime 本地 UTC
-        const dayStartTime = moment(
-          `${dayDate.format("YYYY-MM-DD")} ${startTime}`,
-          "YYYY-MM-DD HH:mm"
-        ).toDate();
-
-        return prisma.itineraryDay.create({
+    try {
+      // if (!payload) return;
+      // 使用交易確保建立行程、聊天室與成員一致
+      const [itinerary, room] = await prisma.$transaction([
+        prisma.itinerary.create({
           data: {
-            itineraryId: itinerary.id,
-            dayDate: dayDate.toDate(),
-            startTime: dayStartTime,
-            status: 1,
+            // userId: payload.user_id,
+            userId: userId,
+            title: title,
+            area: area,
+            figure: figure,
           },
-        });
-      })
-    );
+        }),
+        prisma.room.create({
+          data: {
+            roomName: title ? `行程: ${title}` : `Itinerary-${Date.now()}`,
+          },
+        }),
+      ]);
 
-    //3.回傳訊息
-    if (result) {
-      console.log("is send");
-      res.status(200).json({
-        success: true,
-        message: "行程建立完成",
-        itineraryId: itinerary.id,
-        roomId: room.id,
+      // 更新 itinerary 加上 roomId
+      await prisma.itinerary.update({
+        where: { id: itinerary.id },
+        data: { roomId: room.id },
       });
+
+      // 將使用者加入 user_itineraries 與房間成員
+      await prisma.userItinerary.create({
+        data: {
+          // userId: payload.user_id,
+          userId: userId,
+          itineraryId: itinerary.id,
+        },
+      });
+      await prisma.roomMember.create({
+        data: {
+          roomId: room.id,
+          // userId: payload.user_id,
+          userId: userId,
+        },
+      });
+
+      //2.建立每日行程
+      const start = moment.tz(startDay, "Asia/Taipei"); //2025-11-10",轉亞洲本地端
+      const end = moment.tz(endDay, "Asia/Taipei");
+
+      const totalDays = end.diff(start, "days") + 1; //取得行程天數
+
+      const result = await Promise.all(
+        Array.from({ length: totalDays }).map((_, i) => {
+          // const dayDate = start.clone().add(i, "days").startOf("day"); //moment 轉 datetime 本地 UTC
+          const dayDate = start.clone().add(i, "days"); //moment 轉 datetime 本地 UTC
+          const dayStartTime = moment(
+            `${dayDate.format("YYYY-MM-DD")} ${startTime}`,
+            "YYYY-MM-DD HH:mm"
+          ).toDate();
+
+          return prisma.itineraryDay.create({
+            data: {
+              itineraryId: itinerary.id,
+              dayDate: dayDate.toDate(),
+              startTime: dayStartTime,
+              status: 1,
+            },
+          });
+        })
+      );
+
+      //3.回傳訊息
+      if (result) {
+        console.log("is send");
+        res.status(200).json({
+          success: true,
+          message: "行程建立完成",
+          itineraryId: itinerary.id,
+          roomId: room.id,
+        });
+      }
+    } catch (err) {
+      console.log(err);
     }
-  } catch (err) {
-    console.log(err);
   }
-});
+);
 
 //更新文章內容
 router.put("/update-article", async (req: Request, res: Response) => {
@@ -628,7 +648,7 @@ router.post("/save", async (req: Request, res: Response) => {
     //=======================================================
     // ✅ 3. 清理不存在的 Days
     //=======================================================
-    const newDayIds = newItinerary.map((d) => d.id).filter(Boolean);
+    const newDayIds = newItinerary.map((d: any) => d.id).filter(Boolean);
     const oldDayIds = oldItinerary.Days.map((d) => d.id);
     const deletedDayIds = oldDayIds.filter((id) => !newDayIds.includes(id));
 
@@ -652,7 +672,10 @@ router.post("/save", async (req: Request, res: Response) => {
     return res.json({ success: true, message: "行程保存成功" });
   } catch (err) {
     console.error("❌ /save 發生錯誤:", err);
-    return res.status(500).json({ error: "伺服器錯誤", details: err.message });
+    return res.status(500).json({
+      error: "伺服器錯誤",
+      details: err instanceof Error ? err.message : String(err),
+    });
   }
 });
 // router.post("/save", async (req: Request, res: Response) => {
@@ -1463,6 +1486,158 @@ router.get("/nearby", async (req: Request, res: Response) => {
   }
 });
 
+//依照景點轉換經緯度搜尋住宿資訊
+router.get("/stay-nearby/:place", async (req: Request, res: Response) => {
+  const place = req.params.place;
+  if (!place)
+    return res.status(400).json({ success: false, message: "缺少 place 參數" });
+  const keyword = place;
+  // 可選半徑（公里），預設 12 公里；用於最終過濾與排序
+  const radiusRaw = Number(req.query.radiusKm as string);
+  const radiusKm = Number.isFinite(radiusRaw) && radiusRaw > 0 ? radiusRaw : 20;
+  // 提供給 geo 擴張的公里數，至少 30km 以確保候選足夠
+  const inflateForGeo = Math.max(radiusKm, 30);
+
+  let center, bounds, count;
+  try {
+    ({ center, bounds, count } = await resolveTextToGeo(keyword, {
+      inflateKm: inflateForGeo,
+    }));
+  } catch (err) {
+    console.error("resolveTextToGeo 失敗 =>", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "地理解析失敗", detail: String(err) });
+  }
+
+  const effectiveBounds =
+    bounds ||
+    (center ? buildBoundsFromCenter(center.lat, center.lng, 30) : null);
+  if (!effectiveBounds) {
+    return res.status(404).json({ success: false, message: "找不到地理範圍" });
+  }
+  const { minLat, minLng, maxLat, maxLng } = effectiveBounds;
+  // console.log("bounds=>", { minLat, minLng, maxLat, maxLng });
+
+  try {
+    console.log(
+      "sample=>",
+      await prisma.accommodation.findMany({
+        take: 3,
+        select: { name: true, latitude: true, longitude: true },
+      })
+    );
+    const result = await prisma.accommodation.findMany({
+      where: {
+        latitude: { gte: minLat, lte: maxLat },
+        longitude: { gte: minLng, lte: maxLng },
+      },
+      select: {
+        City: { select: { name: true } },
+        name: true,
+        address: true,
+        description: true,
+        latitude: true,
+        longitude: true,
+      },
+    });
+    // 以中心點（或邊界中心）計算距離，過濾到半徑內並排序
+    const refLat = center?.lat ?? (minLat + maxLat) / 2;
+    const refLng = center?.lng ?? (minLng + maxLng) / 2;
+    const withinRadius = result
+      .filter(
+        (r) => typeof r.latitude === "number" && typeof r.longitude === "number"
+      )
+      .map((r) => ({
+        ...r,
+        distanceKm: parseFloat(
+          calculateDistance(
+            refLat,
+            refLng,
+            r.latitude as number,
+            r.longitude as number
+          ).toFixed(2)
+        ),
+      }))
+      .filter((r) => r.distanceKm <= radiusKm)
+      .sort((a, b) => a.distanceKm - b.distanceKm);
+
+    if (withinRadius.length > 0)
+      return res.status(200).json({
+        success: true,
+        data: withinRadius,
+        meta: {
+          center: { lat: refLat, lng: refLng },
+          radiusKm,
+          candidates: result.length,
+        },
+      });
+    // 如果沒找到，擴大搜尋範圍再試一次
+    const wider = buildBoundsFromCenter(
+      center?.lat ?? (minLat + maxLat) / 2,
+      center?.lng ?? (minLng + maxLng) / 2,
+      Math.max(radiusKm, 50)
+    );
+    const retry = await prisma.accommodation.findMany({
+      where: {
+        latitude: { gte: wider.minLat, lte: wider.maxLat },
+        longitude: { gte: wider.minLng, lte: wider.maxLng },
+      },
+      select: {
+        City: { select: { name: true } },
+        name: true,
+        address: true,
+        description: true,
+        latitude: true,
+        longitude: true,
+      },
+    });
+    const retryWithin = retry
+      .filter(
+        (r) => typeof r.latitude === "number" && typeof r.longitude === "number"
+      )
+      .map((r) => ({
+        ...r,
+        distanceKm: parseFloat(
+          calculateDistance(
+            refLat,
+            refLng,
+            r.latitude as number,
+            r.longitude as number
+          ).toFixed(2)
+        ),
+      }))
+      .filter((r) => r.distanceKm <= radiusKm)
+      .sort((a, b) => a.distanceKm - b.distanceKm);
+
+    if (retryWithin.length > 0)
+      return res.status(200).json({
+        success: true,
+        data: retryWithin,
+        meta: {
+          center: { lat: refLat, lng: refLng },
+          radiusKm,
+          candidates: retry.length,
+          note: "fallback-50km",
+        },
+      });
+
+    return res.status(404).json({
+      success: false,
+      message: "找不到相關住宿資訊（請試著加大 radiusKm）",
+      meta: {
+        center: center ?? {
+          lat: (minLat + maxLat) / 2,
+          lng: (minLng + maxLng) / 2,
+        },
+        radiusKm,
+      },
+    });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ success: false, message: "伺服器錯誤" });
+  }
+});
 // 🔧 Haversine 公式 - 計算兩個經緯度之間的距離 (公里)
 function calculateDistance(
   lat1: number,
@@ -1488,6 +1663,17 @@ function calculateDistance(
 // 將度數轉換為弧度
 function toRadians(degrees: number): number {
   return degrees * (Math.PI / 180);
+}
+
+function buildBoundsFromCenter(lat: number, lng: number, radiusKm: number) {
+  const deltaLat = radiusKm / 111.32; // 1度緯度 ≈ 111.32km
+  const deltaLng = radiusKm / (111.32 * Math.cos(toRadians(lat)));
+  return {
+    minLat: lat - deltaLat,
+    maxLat: lat + deltaLat,
+    minLng: lng - deltaLng,
+    maxLng: lng + deltaLng,
+  };
 }
 
 //更新文章
