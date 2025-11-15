@@ -1,18 +1,14 @@
 import { Router } from "express";
 
 import { getFavoritesAcc, toggleFavoriteAcc } from "../../controllers/m3";
-import { jwtParseMiddleware, requireAuth } from "../../middleware";
+import { m3RequireAuth } from "../../middleware";
 
 const router = Router();
 
-// router.get("/favorite", jwtParseMiddleware, requireAuth, getFavoritesAcc);
-router.get("/favorite", jwtParseMiddleware, requireAuth, getFavoritesAcc);
+// GET /api/m3/favorite
+router.get("/favorite", m3RequireAuth, getFavoritesAcc);
 
-router.post(
-  "/favorite/:accId/toggle",
-  jwtParseMiddleware,
-  requireAuth,
-  toggleFavoriteAcc
-);
+// POST /api/m3/favorite/:accId/toggle
+router.post("/favorite/:accId/toggle", m3RequireAuth, toggleFavoriteAcc);
 
 export default router;

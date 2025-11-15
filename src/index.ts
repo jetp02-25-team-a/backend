@@ -10,7 +10,6 @@ import cookieParser from "cookie-parser";
 import session from "express-session";
 import sessionFileStore from "session-file-store";
 import cors from "cors";
-import jwt from "jsonwebtoken";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -32,6 +31,10 @@ import { m3AccommodationsRoute, m3Favorite } from "./routes/m3";
 import http from "http";
 import { Server } from "socket.io";
 import { chatSocket } from "./socket/socket";
+// import { jwtParseMiddleware } from "./middleware";
+
+import { m3JwtParseMiddleware } from "./middleware";
+import { globalErrorHandler } from "./middleware";
 
 // 建立伺服器主物件
 const app = express();
@@ -74,8 +77,12 @@ app.use(cors(corsOptions));
 // 設定靜態內容資料夾
 app.use(express.static("public"));
 
+// JWT 解析 middleware (可選性驗證) (m3用)
+app.use(m3JwtParseMiddleware);
+
 // 解析 JSON body 的中間件
 app.use(express.json());
+
 // 解析 URL-encoded body 的中間件
 app.use(express.urlencoded({ extended: true }));
 
@@ -105,14 +112,14 @@ app.use(
 // JWT 解析 middleware (可選性驗證)
 // app.use(jwtParseMiddleware);
 
-app.use((req: Request, res: Response, next: NextFunction) => {
-  res.locals.pageName = "";
-  res.locals.session = req.session; // 讓所有的 EJS 可以用 session 變數
-  res.locals.query = req.query;
-  res.locals.cookies = req.cookies;
+// app.use((req: Request, res: Response, next: NextFunction) => {
+//   res.locals.pageName = "";
+//   res.locals.session = req.session; // 讓所有的 EJS 可以用 session 變數
+//   res.locals.query = req.query;
+//   res.locals.cookies = req.cookies;
 
-  next();
-});
+//   next();
+// });
 
 // 網站根目錄頁面
 app.get("/", (req: Request, res: Response) => {
@@ -129,11 +136,28 @@ app.use("/api/place", placeRouter);
 app.use("/api/favorite", favoriteRouter);
 app.use("/api/article", articleRouter);
 app.use("/api/itineraries", itinerariesRouter);
+app.use("/api", mallRouter);
 
-app.use("/api/likeroutes",likeroutes);
+app.use("/api/likeroutes", likeroutes);
 //m3 routes
 app.use("/api/m3", m3AccommodationsRoute);
 app.use("/api/m3", m3Favorite);
+
+// --------------------------------------------------------------------
+
+// 1. 處理所有未匹配到的路由 (404 Not Found)
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    message: "API 路由不存在 (Not Found)",
+    path: req.originalUrl,
+  });
+});
+
+// 2. 全域錯誤處理器 (必須放在所有路由和 404 之後)
+app.use(globalErrorHandler);
+
+// --------------------------------------------------------------------
 
 // ---------- 建立 HTTP + Socket.IO 伺服器 ----------
 const server = http.createServer(app);
@@ -145,7 +169,42 @@ const io = new Server(server, {
 });
 
 chatSocket(io);
-app.use("/api", mallRouter);
+
+function shutdownGracefully(server: http.Server, source: string) {
+  console.log(`\n[Shutdown] 來源: ${source} - 啟動優雅關機...`);
+
+  // 嘗試關閉 HTTP 伺服器，等待所有當前連接完成
+  server.close(() => {
+    console.log("✅ HTTP 伺服器連線已關閉。");
+    // 修正：當正常關閉時，使用狀態碼 0 (成功) 退出
+    process.exit(0);
+  });
+
+  // 如果連接在 5 秒內未能關閉，則強制退出
+  setTimeout(() => {
+    console.error("❌ 強制關閉：連線未能及時關閉。");
+    // 保持：當強制關閉時，使用狀態碼 1 (錯誤) 退出
+    process.exit(1);
+  }, 5000).unref();
+}
+
+// --------------------------------------------------------------------
+
+// 1. 處理未被捕獲的同步錯誤 (最嚴重的錯誤)
+process.on("uncaughtException", (err: Error) => {
+  console.error("❌ FATAL: 未被捕獲的同步錯誤！伺服器關閉中...");
+  console.error(err);
+  shutdownGracefully(server, "uncaughtException");
+});
+
+// 2. 處理未被處理的 Promise 拒絕 (異步錯誤)
+process.on("unhandledRejection", (reason: any, promise: Promise<any>) => {
+  console.error("❌ FATAL: 未被處理的 Promise 錯誤！伺服器關閉中...");
+  console.error(reason);
+  shutdownGracefully(server, "unhandledRejection");
+});
+
+// --------------------------------------------------------------------
 
 const port = +(process.env.PORT || "3002");
 server.listen(port, () => {

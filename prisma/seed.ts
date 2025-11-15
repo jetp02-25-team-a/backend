@@ -15,6 +15,8 @@ type AccommodationTypeCreateInput = Prisma.AccommodationTypeCreateInput;
 type AmenityCreateInput = Prisma.AmenityCreateInput;
 type UserCreateInput = Prisma.UserCreateInput;
 type AccommodationCreateInput = Prisma.AccommodationCreateInput;
+type RoomRateCreateManyInput = Prisma.RoomRateCreateManyInput;
+type RoomInventoryCreateManyInput = Prisma.RoomInventoryCreateManyInput;
 
 // 基礎資料路徑
 const CITIES_JSON_PATH = path.join(process.cwd(), "seeds", "cities.json");
@@ -30,13 +32,38 @@ const USERS_JSON_PATH = path.join(process.cwd(), "seeds", "users.json");
 const USER_COUNT_FAKER = 100; // 額外生成的 Faker 用戶數量
 const ACCOMMODATION_COUNT = 200;
 const ROOM_TYPE_PER_ACCOMMODATION = 5;
-const NUM_BOOKINGS = 1000;
+// 定義目標時間窗的邊界 (來自原 Seeding 配置 [5])
+// 統一頂層常數 (字串形式保留，如果需要計算 DAYS_IN_WINDOW)
+const WINDOW_START_DATE_STR = "2025-10-01T00:00:00.000Z";
+const WINDOW_END_DATE_STR = "2026-01-01T00:00:00.000Z";
+
+// 統一頂層 Date 物件
+const WINDOW_START_DATE_OBJ = new Date(WINDOW_START_DATE_STR);
+const WINDOW_END_DATE_OBJ = new Date(WINDOW_END_DATE_STR);
+
+// DAYS_IN_WINDOW 計算也要使用 _STR 或 _OBJ
+const DAYS_IN_WINDOW =
+  (WINDOW_END_DATE_OBJ.getTime() - WINDOW_START_DATE_OBJ.getTime()) /
+  (1000 * 60 * 60 * 24);
+
+const BOOKINGS_PER_DAY = 50; // 每天基準訂單數量
+const NUM_BOOKINGS = BOOKINGS_PER_DAY * DAYS_IN_WINDOW;
+// 價格規則: 平日 10% 折扣
+const WEEKDAY_DISCOUNT_FACTOR = 0.9;
+
+/** 判斷是否為平日 (週一到週五)  */
+function isWeekday(date: Date): boolean {
+  const dayOfWeek = date.getUTCDay(); // 0 = Sunday, 6 = Saturday
+  // 1 (Monday) to 5 (Friday)
+  return dayOfWeek >= 1 && dayOfWeek <= 5;
+}
 
 // 儲存已建立資料的 ID 列表，用於建立關聯
 let cities: { id: number; name: string }[] = [];
 let cityIds: number[] = [];
 let typeIds: number[] = [];
-let amenityIds: number[] = [];
+let roomAmenityIds: number[] = [];
+let publicAmenityIds: number[] = [];
 let userIds: number[] = [];
 let accommodationIds: number[] = [];
 let roomTypeIds: number[] = [];
@@ -134,6 +161,28 @@ function generateRandomImagePath(
   return relativePath;
 }
 
+async function loadAndCategorizeAmenities() {
+  const allAmenities = await prisma.amenity.findMany({
+    select: { id: true, type: true },
+  });
+
+  publicAmenityIds = allAmenities
+    .filter((a) => a.type !== "客房設施")
+    .map((a) => a.id);
+
+  roomAmenityIds = allAmenities
+    .filter((a) => a.type === "客房設施")
+    .map((a) => a.id);
+
+  if (publicAmenityIds.length === 0 || roomAmenityIds.length === 0) {
+    console.warn("⚠️ 設施分類資料不足，請檢查 Amenity 靜態資料。");
+  } else {
+    console.log(
+      `設施分類完成：公共 ${publicAmenityIds.length} 個，客房 ${roomAmenityIds.length} 個。`
+    );
+  }
+}
+
 // -----------------------------------------------------------
 // Ⅰ. 基礎靜態資料 Seeding (JSON 匯入 - 已修正 TypeScript 錯誤)
 // -----------------------------------------------------------
@@ -215,12 +264,7 @@ async function seedAllStaticData() {
     "name"
   );
 
-  await seedStaticData(
-    "Amenity",
-    AMENITIES_JSON_PATH,
-    (ids) => (amenityIds = ids),
-    "name"
-  );
+  await seedStaticData("Amenity", AMENITIES_JSON_PATH, () => {}, "name");
 }
 
 // -----------------------------------------------------------
@@ -271,7 +315,7 @@ async function seedUsers() {
       description: faker.lorem.sentences(2),
       point: faker.number.int({ min: 100, max: 5000 }),
       safety: faker.helpers.arrayElement([0, 0, 0, 1]),
-      avatar: generateRandomImagePath("avatars/avatar", 1, 100),
+      avatar: generateRandomImagePath("avatar", 1, 100),
     });
   }
 
@@ -354,9 +398,10 @@ async function seedAccommodations() {
 
     // 2. 組合句子並加入標點符號，使其看起來像簡介 (約 60-100 字)
     const description = `
-      ${accommodationName} 坐落於美麗的 ${faker.location.city()}，環境優雅，是您放鬆身心的理想選擇。
+      ${accommodationName} 坐落於美麗的 ${randomCity.name}，環境優雅，是您放鬆身心的理想選擇。
       我們提供 ${sentence1} 等多元服務，讓每位旅客都能享有賓至如歸的體驗。
-      無論是商務差旅或休閒度假，都歡迎您來感受 ${sentence2} 的極致享受。${sentence3}。 
+      無論是商務差旅或休閒度假，都歡迎您來感受 ${sentence2} 的極致享受。${sentence3}。
+      ${sentence4}。
     `
       .replace(/\s+/g, " ") // 移除多餘空格和換行
       .trim();
@@ -454,7 +499,7 @@ async function seedAccommodationDetails() {
     await prisma.accommodationImage.createMany({ data: imageLinks });
 
     // Amenities (隨機 8-12 個設施)
-    const randomAmenities = faker.helpers.arrayElements(amenityIds, {
+    const randomAmenities = faker.helpers.arrayElements(publicAmenityIds, {
       min: 8,
       max: 12,
     });
@@ -691,7 +736,7 @@ async function seedRoomTypesAndAmenities() {
       roomTypeIds.push(roomType.id);
 
       // 建立 RoomType Amenities (隨機 1-3 個設施)
-      const randomAmenities = faker.helpers.arrayElements(amenityIds, {
+      const randomAmenities = faker.helpers.arrayElements(roomAmenityIds, {
         min: 3,
         max: 6,
       });
@@ -709,100 +754,208 @@ async function seedRoomTypesAndAmenities() {
 // Ⅳ. 交易資料 Seeding
 // -----------------------------------------------------------
 
-/** 8. 填充 Booking 和 Review */
+/** 8. 填充 Booking 和 Review (新版：支援多房型、動態價格與庫存檢查) */
 async function seedBookingsAndReviews() {
-  // 定義目標時間窗的邊界
-  const WINDOW_START_DATE = "2025-10-01T00:00:00.000Z";
-  const WINDOW_END_DATE = "2026-04-01T00:00:00.000Z"; // 2025-10-01 起的六個月後
+  if (userIds.length === 0 || accommodationIds.length === 0) return;
 
-  if (userIds.length === 0 || roomTypeIds.length === 0) return;
-
+  // 清除舊資料
   await prisma.review.deleteMany();
   await prisma.bookingItem.deleteMany();
   await prisma.booking.deleteMany();
 
+  // 🌟 新增：計算 Check-in 的最大隨機日期 (WINDOW_END_DATE_OBJ 的前一天)
+  // 這樣能確保 checkInDate 之後一定還有空間給 checkOutDate
+  const checkInMaxDate = new Date(WINDOW_END_DATE_OBJ);
+  checkInMaxDate.setDate(checkInMaxDate.getDate() - 1);
+
+  // 如果時間窗只有一天或更短，則無法產生訂單，直接返回
+  if (checkInMaxDate < WINDOW_START_DATE_OBJ) {
+    console.warn("⚠️ 時間窗過短 (少於兩天)，無法生成訂單。");
+    return;
+  }
+
   for (let i = 0; i < NUM_BOOKINGS; i++) {
-    const randomRoomTypeId = faker.helpers.arrayElement(roomTypeIds);
+    const randomAccommodationId = faker.helpers.arrayElement(accommodationIds);
     const randomUserId = faker.helpers.arrayElement(userIds);
 
-    const roomType = await prisma.roomType.findUnique({
-      where: { id: randomRoomTypeId },
-      select: { accommodationId: true, basePrice: true },
+    // 1. 取得該住宿下的所有房型 ID [4]
+    const allRoomTypesForAcc = await prisma.roomType.findMany({
+      where: { accommodationId: randomAccommodationId },
+      select: { id: true, basePrice: true },
     });
-    if (!roomType) continue;
+    const availableRoomTypeIds = allRoomTypesForAcc.map((rt) => rt.id);
 
-    // 模擬入住日期 (在 2025-10-01 到 2026-04-01 之間隨機選擇)
+    if (availableRoomTypeIds.length === 0) continue;
+
+    // 2. 隨機選定 1 到 3 種不同的房型 [5, 6]
+    const selectedRoomTypeIds = faker.helpers.arrayElements(
+      availableRoomTypeIds,
+      {
+        min: 1,
+        max: 3,
+      }
+    );
+
+    // ----------------------------------------------------
+    // 3. 確定入住/退房日期 (修正錯誤邏輯)
+
     const checkInDate = faker.date.between({
-      from: WINDOW_START_DATE,
-      to: WINDOW_END_DATE,
+      from: WINDOW_START_DATE_OBJ,
+      to: checkInMaxDate, // 🌟 使用修正後的上限
     });
 
-    // 模擬退房日期 (在入住日期之後，且不超過 2026-04-01)
-    const checkOutDate = faker.date.between({
-      from: checkInDate,
-      to: WINDOW_END_DATE,
-    });
+    // 創建次日作為退房日期的隨機起始點
+    const checkInDatePlusOne = new Date(checkInDate);
+    checkInDatePlusOne.setDate(checkInDatePlusOne.getDate() + 1);
 
-    // 確保 checkOutDate 至少比 checkInDate 晚一天，避免當天入住當天退房
-    // 注意：faker.date.between 已經保證了 from <= to。這裡額外加入邏輯確保至少一晚的住宿。
-    if (checkInDate.getTime() === checkOutDate.getTime()) {
-      // 如果隨機結果相同，強制讓 checkOutDate 晚一天 (86400000 毫秒 = 1天)
-      checkOutDate.setDate(checkOutDate.getDate() + 1);
-      // 再次檢查是否超過時間窗，如果超過則忽略此筆資料或調整
-      if (checkOutDate > new Date(WINDOW_END_DATE)) continue;
+    // 這裡 now checkInDatePlusOne 必然早於或等於 WINDOW_END_DATE_OBJ
+    let checkOutDate = faker.date.between({
+      from: checkInDatePlusOne,
+      to: WINDOW_END_DATE_OBJ,
+    });
+    // ----------------------------------------------------
+
+    // 這裡的邏輯已經得到保證，但保留計算天數
+    const stayDurationDays = Math.ceil(
+      (checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+    // 由於生成邏輯已優化，此判斷幾乎不會觸發，但作為安全檢查保留
+    if (stayDurationDays <= 0) continue;
+
+    let totalBookingAmount = 0;
+    const bookingItemsToCreate = [];
+    const inventoryUpdates = [];
+    let bookingIsFeasible = true;
+
+    // 4. 遍歷所有選定的房型，進行檢查、價格彙總與準備庫存削減
+    for (const roomTypeId of selectedRoomTypeIds) {
+      const itemQuantity = faker.number.int({ min: 1, max: 2 }); // 該房型預訂的間數
+
+      // 查詢 RoomRate 和 RoomInventory [9, 10]
+      const [rates, inventories] = await Promise.all([
+        prisma.roomRate.findMany({
+          where: {
+            roomTypeId: roomTypeId,
+            date: { gte: checkInDate, lt: checkOutDate },
+          },
+          select: { date: true, dailyPrice: true },
+        }),
+        prisma.roomInventory.findMany({
+          where: {
+            roomTypeId: roomTypeId,
+            date: { gte: checkInDate, lt: checkOutDate },
+          },
+          select: { date: true, availableCount: true },
+        }),
+      ]);
+
+      // 確保數據完整 [10]
+      if (
+        rates.length !== stayDurationDays ||
+        inventories.length !== stayDurationDays
+      ) {
+        bookingIsFeasible = false;
+        break;
+      }
+
+      let itemTotalPrice = 0;
+      let currentItemIsAvailable = true;
+
+      // 檢查庫存和累計價格
+      for (const rate of rates) {
+        const inventory = inventories.find(
+          (inv) => inv.date.getTime() === rate.date.getTime()
+        );
+
+        // 檢查庫存是否足夠 (availableCount < quantity) [11]
+        if (!inventory || inventory.availableCount < itemQuantity) {
+          currentItemIsAvailable = false;
+          bookingIsFeasible = false;
+          break;
+        }
+
+        itemTotalPrice += parseFloat(rate.dailyPrice.toString()) * itemQuantity;
+
+        // 儲存庫存更新資訊 (如果交易成功將用於削減)
+        inventoryUpdates.push({
+          roomTypeId: roomTypeId,
+          date: inventory.date,
+          availableCountBefore: inventory.availableCount,
+          quantityToBook: itemQuantity,
+        });
+      }
+
+      if (!currentItemIsAvailable) break;
+
+      // 準備 BookingItem 數據
+      const itemUnitPrice = itemTotalPrice / (itemQuantity * stayDurationDays);
+      totalBookingAmount += itemTotalPrice;
+
+      bookingItemsToCreate.push({
+        roomTypeId: roomTypeId,
+        quantity: itemQuantity,
+        unitPrice: new Prisma.Decimal(itemUnitPrice),
+      });
     }
 
-    // 假設住宿天數為 2 晚，或其他隨機天數
-    // const stayDurationDays = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
-    const quantity = faker.number.int({ min: 1, max: 3 });
-    const unitPrice = parseFloat(roomType.basePrice.toString());
-    // 為了簡化 totalAmount 計算，這裡假設一個簡單的乘數（例如 2 晚），但更好的做法是使用實際天數。
-    const totalAmount = unitPrice * quantity * 2;
+    if (!bookingIsFeasible || bookingItemsToCreate.length === 0) continue; // 任何一個房型不合格，則跳過
 
+    // 5. 削減庫存 (通過檢查，執行更新)
+    const status = faker.helpers.arrayElement([
+      "Confirmed",
+      "Completed",
+      "Cancelled",
+    ]);
+
+    if (status !== "Cancelled") {
+      const updatePromises = inventoryUpdates.map((update) =>
+        prisma.roomInventory.update({
+          where: {
+            roomTypeId_date: {
+              roomTypeId: update.roomTypeId,
+              date: update.date,
+            },
+          },
+          data: {
+            availableCount: update.availableCountBefore - update.quantityToBook,
+          },
+        })
+      );
+      await Promise.all(updatePromises);
+    }
+
+    // 6. 建立 Booking 和 BookingItem (批量創建)
     const booking = await prisma.booking.create({
       data: {
         userId: randomUserId,
-        accommodationId: roomType.accommodationId,
+        accommodationId: randomAccommodationId,
         checkInDate: checkInDate,
         checkOutDate: checkOutDate,
-        totalAmount: totalAmount,
-        status: faker.helpers.arrayElement([
-          "Confirmed",
-          "Completed",
-          "Cancelled",
-        ]),
+        totalAmount: new Prisma.Decimal(totalBookingAmount), // 總金額
+        status: status,
         guestName: faker.person.fullName(),
         guestContact: faker.helpers.replaceSymbols("0#-####-####"),
-
-        // 建立 Booking Item
         Items: {
-          create: [
-            {
-              roomTypeId: randomRoomTypeId,
-              quantity: quantity,
-              unitPrice: unitPrice,
-            },
-          ],
+          create: bookingItemsToCreate, // 創建多個 BookingItem
         },
       },
     });
 
-    // 隨機建立 Review (狀態為 Completed 且 80% 機率有評論)
+    // 7. 隨機建立 Review [13, 14]
     if (booking.status === "Completed" && faker.datatype.boolean(0.8)) {
       await prisma.review.create({
         data: {
           accommodationId: booking.accommodationId,
           userId: randomUserId,
-          bookingId: booking.id,
+          bookingId: booking.id, // bookingId 欄位設定為 @unique [15]
           ratingScore: faker.number.int({ min: 1, max: 5 }),
           comment: faker.lorem.sentences(3),
         },
       });
     }
   }
-
   console.log(
-    `✅ ${NUM_BOOKINGS} 筆 Booking (2025-10-01 至 2026-04-01 範圍內) 和相關 Review 資料填充完成。`
+    `✅ ${NUM_BOOKINGS} 筆 Booking (已支援多房型、動態定價並削減庫存) 和相關 Review 資料填充完成。`
   );
 }
 
@@ -841,6 +994,131 @@ export async function seedFavorites() {
   );
 }
 
+/** 10. 填充 RoomRate (每日價格) 和 RoomInventory (每日庫存) */
+async function seedRoomRatesAndInventory() {
+  console.log("--- 正在填充 RoomRate 和 RoomInventory (M3動態擴展) ---");
+
+  await prisma.roomRate.deleteMany();
+  await prisma.roomInventory.deleteMany();
+
+  // 1. 取得所有 RoomType 資料
+  const allRoomTypes = await prisma.roomType.findMany({
+    select: {
+      id: true,
+      basePrice: true,
+      totalRooms: true,
+    },
+  });
+
+  // 2. 獲取並聚合所有 Booking Item 數據，以便削減庫存 (包含 booking status 判斷)
+  const allBookingItems = await prisma.bookingItem.findMany({
+    include: {
+      Booking: {
+        select: {
+          checkInDate: true,
+          checkOutDate: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  const bookedQuantities = new Map<string, number>();
+
+  for (const item of allBookingItems) {
+    // 僅計算 Confirmed 或 Completed 的訂單 [4]
+    if (
+      item.Booking.status === "Confirmed" ||
+      item.Booking.status === "Completed"
+    ) {
+      const checkIn = new Date(item.Booking.checkInDate);
+      const checkOut = new Date(item.Booking.checkOutDate);
+
+      const dayIterator = new Date(checkIn);
+
+      while (dayIterator < checkOut) {
+        // 將日期標準化為午夜 UTC，作為 Map Key
+        const dateKey = dayIterator.toISOString().split("T");
+        const mapKey = `${item.roomTypeId}-${dateKey}`;
+
+        // 累計當天該房型被預訂的數量
+        const currentQuantity = bookedQuantities.get(mapKey) || 0;
+        bookedQuantities.set(mapKey, currentQuantity + item.quantity);
+
+        // 推進到下一天
+        dayIterator.setDate(dayIterator.getDate() + 1);
+      }
+    }
+  }
+
+  const roomRatesData: RoomRateCreateManyInput[] = [];
+  const roomInventoryData: RoomInventoryCreateManyInput[] = [];
+
+  // 3. 遍歷時間窗，填充每日價格和庫存
+  for (const roomType of allRoomTypes) {
+    const currentDay = new Date(WINDOW_START_DATE_OBJ);
+
+    while (currentDay < WINDOW_END_DATE_OBJ) {
+      const dateKey = new Date(currentDay);
+      dateKey.setUTCHours(0, 0, 0, 0);
+
+      // --- 價格計算 (RoomRate) ---
+      const basePrice = parseFloat(roomType.basePrice.toString());
+      [4];
+      let dailyPrice = basePrice;
+
+      if (isWeekday(currentDay)) {
+        // 平日折扣 10%
+        dailyPrice = dailyPrice * WEEKDAY_DISCOUNT_FACTOR;
+      }
+
+      roomRatesData.push({
+        roomTypeId: roomType.id,
+        date: dateKey,
+        dailyPrice: dailyPrice,
+      });
+
+      // --- 庫存計算 (RoomInventory) ---
+      const totalRooms = roomType.totalRooms;
+      [5];
+      const dailyMapKey = `${roomType.id}-${dateKey.toISOString().split("T")}`;
+
+      // 獲取該天該房型被訂走的數量
+      const bookedCount = bookedQuantities.get(dailyMapKey) || 0;
+
+      // 可用庫存 = 總庫存 - 已訂數量
+      const availableCount = Math.max(0, totalRooms - bookedCount);
+
+      roomInventoryData.push({
+        roomTypeId: roomType.id,
+        date: dateKey,
+        totalCount: totalRooms,
+        availableCount: availableCount,
+      });
+
+      // 推進到下一天
+      currentDay.setDate(currentDay.getDate() + 1);
+    }
+  }
+
+  // 4. 批量插入資料
+  await prisma.roomRate.createMany({
+    data: roomRatesData,
+    skipDuplicates: true,
+  });
+  await prisma.roomInventory.createMany({
+    data: roomInventoryData,
+    skipDuplicates: true,
+  });
+
+  console.log(
+    `✅ RoomRate: 已填充 ${roomRatesData.length} 筆每日價格數據 (平日 10% 折扣)。`
+  );
+  console.log(
+    `✅ RoomInventory: 已填充 ${roomInventoryData.length} 筆每日庫存數據。`
+  );
+}
+
 // 工具函式：隨機抽取陣列中的 N 筆資料
 function getRandomSubset<T>(array: T[], count: number): T[] {
   return [...array].sort(() => 0.5 - Math.random()).slice(0, count);
@@ -860,6 +1138,10 @@ async function clearDatabase() {
   // 1. 交易/關聯層 (引用 Booking, RoomType, User, Accommodation)
   await prisma.review.deleteMany(); // 引用 Booking, User, Accommodation
   await prisma.bookingItem.deleteMany(); // 引用 Booking, RoomType
+
+  await prisma.roomRate.deleteMany();
+  await prisma.roomInventory.deleteMany();
+
   await prisma.booking.deleteMany(); // 引用 User, Accommodation
   await prisma.roomTypeAmenity.deleteMany(); // 引用 RoomType, Amenity
   await prisma.favoriteAccommodation.deleteMany(); // 引用 User, Accommodation
@@ -895,6 +1177,8 @@ async function main() {
   // 步驟 Ⅰ: 基礎靜態資料 (JSON 匯入)
   await seedAllStaticData();
 
+  await loadAndCategorizeAmenities();
+
   // 步驟 Ⅱ: 核心用戶與住宿 (混合模式)
   await seedUsers();
   await seedAccommodations();
@@ -903,9 +1187,15 @@ async function main() {
   await seedAccommodationDetails();
   await seedRoomTypesAndAmenities();
 
+  // 🌟 M3 模組擴展 (動態價格/庫存：必須在 Booking 之前執行)
+  await seedRoomRatesAndInventory();
+
   // 步驟 Ⅳ: 交易資料 (Faker 交易)
   // ⚠️ 註：這裡僅示範核心 Booking/Review，其他模型如 RoomRate/Inventory, Favorite/Like 需自行擴展
   await seedBookingsAndReviews();
+
+  // 🌟 M3 模組擴展 (用戶行為：FavoriteAccommodation)
+  await seedFavorites();
 
   console.log("🎉 所有核心 Seeding 流程已完成！");
 }

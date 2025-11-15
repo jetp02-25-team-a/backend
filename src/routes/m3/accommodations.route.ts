@@ -1,16 +1,18 @@
 import { Router } from "express";
 import {
-  getAccommodations,
+  listAccommodations,
+  listPopularAccommodations,
+  listHighRatedAccommodations,
+  searchAccommodations,
   getAccommodationById,
-  getAccommodationList,
-  getAccommodationSearch,
 } from "../../controllers/m3";
 
 const router = Router();
 
-router.get("/accommodations", getAccommodationList);
-router.get("/accommodations/search", getAccommodationSearch);
-
+router.get("/accommodations", listAccommodations);
+router.get("/accommodations/popular", listPopularAccommodations);
+router.get("/accommodations/highRated", listHighRatedAccommodations);
+router.get("/accommodations/search", searchAccommodations);
 router.get("/accommodations/:id", getAccommodationById);
 
 export default router;

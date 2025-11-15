@@ -1,8 +1,11 @@
+import type { Accommodation } from "../../generated/prisma";
 import type {
+  AccommodationDTO,
   AccommodationListDTO,
+  AmenityDTO,
+  ReviewDTO,
+  RoomTypeDTO,
   SearchParams,
-  SortDirection,
-  SortType,
 } from "../../interfaces/m3";
 import { prisma } from "../prisma-pagination";
 
@@ -35,19 +38,30 @@ export function buildAccommodationWhere(params: SearchParams) {
     ];
   }
 
-  if (params.hasUserInputDate) {
+  if (
+    params.hasUserInputDate ||
+    (params.roomTypeAmenities && params.roomTypeAmenities.length > 0)
+  ) {
     where.RoomTypes = {
       some: {
-        maxCapacity: { gte: params.guestCount ?? 1 },
-        Inventories: {
-          some: {
-            date: {
-              gte: new Date(params.checkInDate!),
-              lt: new Date(params.checkOutDate!),
+        ...(params.hasUserInputDate && {
+          maxCapacity: { gte: params.guestCount ?? 1 },
+          Inventories: {
+            some: {
+              date: {
+                gte: new Date(params.checkInDate!),
+                lt: new Date(params.checkOutDate!),
+              },
+              availableCount: { gt: 0 },
             },
-            availableCount: { gt: 0 },
           },
-        },
+        }),
+        ...(params.roomTypeAmenities &&
+          params.roomTypeAmenities.length > 0 && {
+            Amenities: {
+              some: { name: { in: params.roomTypeAmenities } },
+            },
+          }),
       },
     };
   }
@@ -62,17 +76,6 @@ export function buildAccommodationWhere(params: SearchParams) {
     };
   }
 
-  // 篩選房型設施
-  if (params.roomTypeAmenities && params.roomTypeAmenities.length > 0) {
-    where.RoomTypes = {
-      some: {
-        Amenities: {
-          some: { name: { in: params.roomTypeAmenities } },
-        },
-      },
-    };
-  }
-
   // 收藏
   if (params.favoriteIds && params.favoriteIds.length > 0) {
     where.id = { in: params.favoriteIds };
@@ -81,27 +84,7 @@ export function buildAccommodationWhere(params: SearchParams) {
   return where;
 }
 
-export function buildOrderBy(
-  sort?: SortType,
-  direction: SortDirection = "desc"
-) {
-  switch (sort) {
-    case "popular":
-      return [
-        { Favorites: { _count: direction } },
-        { id: direction }, // 保證唯一
-      ];
-    case "highRated":
-      return [
-        { Reviews: { _avg: { ratingScore: direction } } },
-        { id: direction }, // 保證唯一
-      ];
-    default:
-      return [{ id: direction }];
-  }
-}
-
-export async function attachAggregates(accommodations: any[]) {
+export async function attachAggregates(accommodations: Accommodation[]) {
   const [ratings, favorites] = await Promise.all([
     prisma.review.groupBy({
       by: ["accommodationId"],
@@ -141,4 +124,72 @@ export function mapToCardDTO(accommodations: any[]): AccommodationListDTO[] {
     longitude: a.longitude ?? null,
     countFavorite: a.countFavorite ?? 0,
   }));
+}
+
+export async function mapToAccommodationDTO(
+  data: any
+): Promise<AccommodationDTO> {
+  if (!data) {
+    throw new Error("Accommodation data is null.");
+  }
+
+  // --- 1. 處理設施：解開 Amenities 橋接層 ---
+  // data.Amenities 是 AccommodationAmenity[]，但每個元素內部才是 Amenity
+  const accommodationAmenities: AmenityDTO[] = data.Amenities.map(
+    (aa: any) => ({
+      id: aa.Amenity.id,
+      name: aa.Amenity.name,
+      type: aa.Amenity.type,
+    })
+  );
+
+  // --- 2. 處理房型：解開 RoomTypes 及其設施 ---
+  const roomTypes: RoomTypeDTO[] = data.RoomTypes.map((rt: any) => ({
+    id: rt.id,
+    name: rt.name,
+    description: rt.description,
+    basePrice: rt.basePrice,
+    maxCapacity: rt.maxCapacity,
+    totalRooms: rt.totalRooms,
+    bedType: rt.bedType,
+    // 巢狀處理房型設施
+    amenities: rt.Amenities.map((rta: any) => ({
+      id: rta.Amenity.id,
+      name: rta.Amenity.name,
+      type: rta.Amenity.type,
+    })),
+  }));
+
+  // --- 3. 處理評論：解開評論者資訊 ---
+  const reviews: ReviewDTO[] = data.Reviews.map((review: any) => ({
+    id: review.id,
+    ratingScore: review.ratingScore,
+    comment: review.comment,
+    reviewDate: review.reviewDate,
+    user: {
+      id: review.User.id,
+      fullName: review.User.fullName,
+      nickname: review.User.nickname,
+      avatar: review.User.avatar,
+    },
+  }));
+
+  // --- 4. 建立頂層 DTO ---
+  return {
+    id: data.id,
+    name: data.name,
+    address: data.address,
+    description: data.description ?? null,
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
+    checkInTime: data.checkInTime ?? null,
+    checkOutTime: data.checkOutTime ?? null,
+    city: data.City.name,
+    type: data.accommodationType.name,
+    contacts: data.Contacts,
+    images: data.Images,
+    amenities: accommodationAmenities,
+    roomTypes: roomTypes,
+    reviews: reviews,
+  };
 }

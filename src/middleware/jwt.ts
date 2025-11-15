@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import type { JwtPayload } from "../interfaces/index.js";
+import { ApiError } from "../lib";
 
 // JWT 設定
 const JWT_SECRET: string =
@@ -36,8 +37,8 @@ export const jwtParseMiddleware = (
       const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
       // 將解析後的用戶資訊掛載到 req 和 res.locals
       req.user = decoded;
-      res.locals.user = decoded;
-      res.locals.isAuthenticated = true;
+      // res.locals.user = decoded;
+      // res.locals.isAuthenticated = true;
     } catch (error) {
       // JWT 無效或過期，但不報錯，只是不設定用戶資訊
       console.warn(
@@ -48,10 +49,10 @@ export const jwtParseMiddleware = (
   }
 
   // 確保 res.locals 有預設值
-  if (!res.locals.user) {
-    res.locals.user = null;
-    res.locals.isAuthenticated = false;
-  }
+  // if (!res.locals.user) {
+  //   res.locals.user = null;
+  //   res.locals.isAuthenticated = false;
+  // }
 
   next();
 };
