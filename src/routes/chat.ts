@@ -11,11 +11,15 @@ function decodeToken(req: Request) {
   //去掉前面七個字Bearer
   //解開jwt
   if (!token) return;
-  const result = jwt.verify(
-    token.substring(7),
-    process.env.JWT_SECRET as string
-  ) as JwtPayload;
-  return result;
+  try {
+    const result = jwt.verify(
+      token.substring(7),
+      process.env.JWT_SECRET as string
+    ) as JwtPayload;
+    return result;
+  } catch (error) {
+    return undefined;
+  }
 }
 
 router.get("/allmessage", async (req: Request, res: Response) => {
@@ -23,7 +27,7 @@ router.get("/allmessage", async (req: Request, res: Response) => {
   const { receiverId, roomId } = req.query; //跟他對話的人的id 或對話房間的ｉｄ
   let data;
   try {
-    if (!payload) return;
+    if (!payload) return res.status(401).json({ message: "未授權" });
     //個人
     if (receiverId) {
       data = await prisma.message.findMany({
@@ -61,8 +65,7 @@ router.get("/allmessage", async (req: Request, res: Response) => {
     if (roomId) {
       data = await prisma.message.findMany({
         where: {
-          senderId: payload.user_id,
-          roomId: +roomId, //轉number
+          roomId: +roomId, //只需要 roomId，不需要過濾 senderId
         },
         select: {
           content: true,
@@ -70,6 +73,16 @@ router.get("/allmessage", async (req: Request, res: Response) => {
           updatedAt: true,
           receiverId: true,
           senderId: true,
+          Sender: {
+            select: {
+              id: true,
+              nickname: true,
+              avatar: true,
+            },
+          },
+        },
+        orderBy: {
+          updatedAt: "asc",
         },
       });
     }
@@ -77,6 +90,124 @@ router.get("/allmessage", async (req: Request, res: Response) => {
     res.status(200).json({ success: true, data: data });
   } catch (err) {
     console.log(err);
+  }
+});
+
+//根據行程 ID ${itineraryId} 尋找對應的聊天室..
+//const response = await fetch(`${API_SERVER}/itineraries/${itineraryId}/room`);
+router.get(
+  "/itineraries/:itineraryId/room",
+  async (req: Request, res: Response) => {
+    const payload = decodeToken(req);
+    if (!payload) return res.status(401).json({ message: "未授權" });
+    const { itineraryId } = req.params;
+    try {
+      const result = await prisma.room.findFirst({
+        where: {
+          Itineraries: {
+            some: {
+              id: +itineraryId,
+            },
+          },
+        },
+        select: {
+          id: true,
+          roomName: true,
+        },
+      });
+
+      if (result) {
+        res.status(200).json({ success: true, data: result });
+      } else {
+        res.status(404).json({ success: false, message: "找不到對應的聊天室" });
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  }
+);
+
+// 根據房間id 取得所有對話
+// `${API_SERVER}/messages/room/${roomId}
+router.get("/messages/room/:roomId", async (req: Request, res: Response) => {
+  console.log("開始找房間訊息===>");
+  const payload = decodeToken(req);
+  if (!payload) return res.status(401).json({ message: "未授權" });
+  const { roomId } = req.params;
+  try {
+    const messages = await prisma.message.findMany({
+      where: {
+        roomId: +roomId,
+      },
+      select: {
+        receiverId: true,
+        content: true,
+        createdAt: true,
+        updatedAt: true,
+        senderId: true,
+        Sender: {
+          select: {
+            id: true,
+            nickname: true,
+            avatar: true,
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: "asc",
+      },
+    });
+    console.log("messages===>", messages);
+    res.status(200).json({ success: true, data: messages });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ success: false, message: "伺服器錯誤" });
+  }
+});
+
+// 標記個人聊天為已讀
+router.post("/mark-read-user", async (req: Request, res: Response) => {
+  const { senderId, receiverId } = req.body;
+
+  try {
+    await prisma.message.updateMany({
+      where: {
+        senderId: senderId,
+        receiverId: receiverId,
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+      },
+    });
+
+    res.status(200).json({ success: true, message: "已標記為已讀" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "伺服器錯誤" });
+  }
+});
+
+// 標記群組聊天為已讀
+router.post("/mark-read-room", async (req: Request, res: Response) => {
+  const { roomId, userId } = req.body;
+
+  try {
+    await prisma.message.updateMany({
+      where: {
+        roomId: roomId,
+        senderId: { not: userId },
+        isRead: false,
+      },
+      data: {
+        isRead: true,
+      },
+    });
+
+    res.status(200).json({ success: true, message: "已標記為已讀" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "伺服器錯誤" });
   }
 });
 

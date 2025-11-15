@@ -806,6 +806,8 @@ model Room {
   Messages Message[]
   Members  RoomMember[]
 
+  Itineraries Itinerary[]
+
   @@map("rooms")
 }
 
@@ -855,6 +857,7 @@ model Itinerary {
   id     Int    @id @default(autoincrement()) @map("itinerary_id")
   userId Int    @map("user_id")
   title  String
+  roomId Int?   @map("room_id")
 
   createdAt DateTime @default(now()) @map("created_at") // 💡 修正：添加 @default(now())
   updatedAt DateTime @updatedAt @map("updated_at") // 💡 修正：添加 @updatedAt
@@ -863,7 +866,8 @@ model Itinerary {
   status Int    @default(1)
   figure Int
 
-  User User @relation(fields: [userId], references: [id])
+  User User  @relation(fields: [userId], references: [id])
+  Room Room? @relation(fields: [roomId], references: [id])
 
   Days                 ItineraryDay[]
   Images               ItineraryImage[]
