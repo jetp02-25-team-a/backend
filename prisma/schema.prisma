@@ -203,7 +203,6 @@ model TripPlan {
   id     Int     @id @default(autoincrement()) @map("trip_plan_id")
   userId Int     @map("user_id")
   title  String
-  area   String
   type   String? // 行程類型（獨旅/朋友/情侶/家族）
 
   // ✅ 目的地外鍵：關聯 City
@@ -278,7 +277,9 @@ model TripPlanDetail {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
   address    String
-  stayTime   String   @map("stay_time")
+  stayHour   Int      @default(0) @map("stay_hour")
+  stayMin    Int      @default(0) @map("stay_min")
+  type       String? // spot / hotel / food/ custom
   startDate  DateTime @map("start_date")
   endDate    DateTime @map("end_date")
   url        String   @map("image_url")
