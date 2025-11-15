@@ -26,8 +26,7 @@ export const addFavorite = async (req, res) => {
 // 取消收藏
 export const removeFavorite = async (req, res) => {
   try {
-    const { userId } = req.query;
-    const { placeId } = req.params;
+    const { userId, placeId } = req.body;
 
     await prisma.favorite.delete({
       where: {
