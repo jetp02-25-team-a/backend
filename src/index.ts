@@ -170,40 +170,6 @@ const io = new Server(server, {
 
 chatSocket(io);
 
-function shutdownGracefully(server: http.Server, source: string) {
-  console.log(`\n[Shutdown] 來源: ${source} - 啟動優雅關機...`);
-
-  // 嘗試關閉 HTTP 伺服器，等待所有當前連接完成
-  server.close(() => {
-    console.log("✅ HTTP 伺服器連線已關閉。");
-    // 修正：當正常關閉時，使用狀態碼 0 (成功) 退出
-    process.exit(0);
-  });
-
-  // 如果連接在 5 秒內未能關閉，則強制退出
-  setTimeout(() => {
-    console.error("❌ 強制關閉：連線未能及時關閉。");
-    // 保持：當強制關閉時，使用狀態碼 1 (錯誤) 退出
-    process.exit(1);
-  }, 5000).unref();
-}
-
-// --------------------------------------------------------------------
-
-// 1. 處理未被捕獲的同步錯誤 (最嚴重的錯誤)
-process.on("uncaughtException", (err: Error) => {
-  console.error("❌ FATAL: 未被捕獲的同步錯誤！伺服器關閉中...");
-  console.error(err);
-  shutdownGracefully(server, "uncaughtException");
-});
-
-// 2. 處理未被處理的 Promise 拒絕 (異步錯誤)
-process.on("unhandledRejection", (reason: any, promise: Promise<any>) => {
-  console.error("❌ FATAL: 未被處理的 Promise 錯誤！伺服器關閉中...");
-  console.error(reason);
-  shutdownGracefully(server, "unhandledRejection");
-});
-
 // --------------------------------------------------------------------
 
 const port = +(process.env.PORT || "3002");
