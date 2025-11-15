@@ -1233,7 +1233,7 @@ router.get("/all-invite/:userId", async (req: Request, res: Response) => {
 //更新旅程邀約
 router.patch("/invite", async (req: Request, res: Response) => {
   const { invitationId, invitationResponse } = req.body;
-  
+
   try {
     //1.先修改invitation的資料
     const result = await prisma.itineraryInvitation.update({
@@ -1378,6 +1378,109 @@ router.get("/user-itineraries", async (req: Request, res: Response) => {
     console.log(err);
   }
 });
+
+// ✅ 附近景點 API - 使用 Haversine 公式計算距離
+router.get("/nearby", async (req: Request, res: Response) => {
+  const { lat, lng, radius = 5 } = req.query;
+
+  // 參數驗證
+  if (!lat || !lng) {
+    return res.status(400).json({
+      success: false,
+      message: "缺少必要參數 (lat, lng)",
+    });
+  }
+
+  const userLat = parseFloat(lat as string);
+  const userLng = parseFloat(lng as string);
+  const searchRadius = parseFloat(radius as string); // 預設 5 公里
+
+  if (isNaN(userLat) || isNaN(userLng) || isNaN(searchRadius)) {
+    return res.status(400).json({
+      success: false,
+      message: "參數格式錯誤",
+    });
+  }
+
+  try {
+    // 1️⃣ 取得所有景點
+    const allAttractions = await prisma.attraction.findMany({
+      select: {
+        id: true,
+        name: true,
+        nameZh: true,
+        lat: true,
+        lng: true,
+        addrCity: true,
+        addrDistrict: true,
+        addrFull: true,
+        image: true,
+        tourism: true,
+        natural: true,
+        historic: true,
+      },
+    });
+
+    // 2️⃣ 使用 Haversine 公式計算距離
+    const nearbyAttractions = allAttractions
+      .map((attraction) => {
+        const distance = calculateDistance(
+          userLat,
+          userLng,
+          attraction.lat,
+          attraction.lng
+        );
+
+        return {
+          ...attraction,
+          distance: parseFloat(distance.toFixed(2)), // 保留兩位小數
+        };
+      })
+      .filter((attraction) => attraction.distance <= searchRadius) // 只保留在半徑內的
+      .sort((a, b) => a.distance - b.distance); // 依距離排序 (由近到遠)
+
+    res.status(200).json({
+      success: true,
+      message: `找到 ${nearbyAttractions.length} 個附近景點`,
+      data: {
+        center: { lat: userLat, lng: userLng },
+        radius: searchRadius,
+        count: nearbyAttractions.length,
+        attractions: nearbyAttractions,
+      },
+    });
+  } catch (err) {
+    console.error("❌ /nearby 錯誤:", err);
+    res.status(500).json({ success: false, message: "伺服器錯誤" });
+  }
+});
+
+// 🔧 Haversine 公式 - 計算兩個經緯度之間的距離 (公里)
+function calculateDistance(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 6371; // 地球半徑 (公里)
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c; // 返回距離 (公里)
+}
+
+// 將度數轉換為弧度
+function toRadians(degrees: number): number {
+  return degrees * (Math.PI / 180);
+}
 
 //更新文章
 // router.put(
