@@ -330,6 +330,7 @@ router.get("/order", async (req: Request, res: Response) => {
       include: {
         OrderDetails: true,
       },
+      orderBy: { id: "desc" },
     });
   } catch (error) {
     console.error("Prisma 查詢訂單發生錯誤:", error);
