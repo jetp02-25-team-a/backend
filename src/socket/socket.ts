@@ -72,10 +72,6 @@ export const chatSocket = (io: Server) => {
 
     //行程相關
 
-    // if (!socket || !itineraryId || !user) return;
-
-    // console.log("🔌 加入行程協作房間:", itineraryId);
-
     //------------------------------------------    // 加入行程協作房間
     socket.on("itinerary:join", (data) => {
       const { itineraryId, userId, userName } = data;
@@ -179,6 +175,83 @@ export const chatSocket = (io: Server) => {
         console.error(`用戶不在房間 ${roomName} 內`);
       }
     });
+    // 設定聊天房間id（新增）
+    socket.on("joinChatRoom", (roomId) => {
+      const chatRoomName = `chat_${roomId}`;
+      socket.join(chatRoomName);
+      socket.data.chatRoomId = roomId; // 儲存聊天房間ID
+      socket.emit("chat:roomJoined", { roomName: chatRoomName, roomId });
+      console.log(`用戶加入聊天房間: ${chatRoomName}`);
+    });
+
+    //設定房間id（保持原本的邏輯，但改名避免混淆）
+    socket.on("joinRoomId", (roomId) => {
+      console.log("接收到的 joinRoomId:", roomId);
+      socket.data.friendId = roomId; // 建議存起來方便之後用
+    });
+
+    // 接收訊息（整合後的版本）
+    socket.on("chat", async (msg, callback) => {
+      let savedMessage;
+
+      try {
+        // 房間聊天處理
+        if (msg.roomId) {
+          const message = await prisma.message.create({
+            data: {
+              senderId: msg.providerId,
+              roomId: msg.roomId, // 使用傳入的 roomId 而不是 socket.data.friendId
+              content: msg.content,
+              messageType: "text",
+            },
+          });
+          savedMessage = message;
+
+          // 廣播給聊天房間內的所有用戶（排除發送者）
+          const chatRoomName = `chat_${msg.roomId}`;
+          socket.to(chatRoomName).emit("newMessage", savedMessage);
+          socket
+            .to(chatRoomName)
+            .emit("message:refetch", { roomId: msg.roomId });
+
+          console.log(`群組訊息已儲存並廣播到房間: ${chatRoomName}`);
+        } else {
+          // 個人聊天處理
+          const message = await prisma.message.create({
+            data: {
+              senderId: msg.providerId,
+              receiverId: msg.acceptId, // 使用傳入的 acceptId
+              content: msg.content,
+              messageType: "text",
+            },
+          });
+          savedMessage = message;
+
+          // 發送給特定用戶（這裡需要根據您的用戶-socket對應邏輯調整）
+          socket.to(msg.acceptId).emit("newMessage", savedMessage);
+          socket
+            .to(msg.acceptId)
+            .emit("message:refetch", { friendId: msg.acceptId });
+
+          console.log("個人訊息已儲存:", message);
+        }
+
+        // 回傳成功訊息給前端
+        if (callback) callback({ success: true, message: "訊息已送出" });
+      } catch (err) {
+        console.error("訊息儲存失敗:", err);
+        if (callback) callback({ success: false, message: "伺服器錯誤" });
+      }
+    });
+
+    //
+    // 後端需要支援聊天房間加入（與行程房間分開）
+    // socket.on("joinChatRoom", (roomId) => {
+    //   const chatRoomName = `chat_${roomId}`;
+    //   socket.join(chatRoomName);
+    //   socket.emit("chat:roomJoined", { roomName: chatRoomName, roomId });
+    //   console.log(`用戶加入聊天房間: ${chatRoomName}`);
+    // });
 
     // 監聽用戶上線/離線
     socket.on("itinerary:userJoined", (data) => {

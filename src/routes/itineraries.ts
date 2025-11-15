@@ -1116,6 +1116,56 @@ router.post(
 router.post("/invite", async (req: Request, res: Response) => {
   const { itineraryId, senderId, receiverId } = req.body;
   try {
+    // 1. 查詢行程取得 roomId
+    const itinerary = await prisma.itinerary.findUnique({
+      where: { id: itineraryId },
+      select: { roomId: true },
+    });
+
+    if (!itinerary?.roomId) {
+      return res.status(404).json({
+        success: false,
+        message: "找不到對應的聊天室",
+      });
+    }
+
+    // 2. 檢查發送者是否已經加入行程
+    const existingUserItinerary = await prisma.userItinerary.findFirst({
+      where: {
+        userId: senderId,
+        itineraryId: itineraryId,
+      },
+    });
+
+    // 如果還沒加入,先將發送者加入行程
+    if (!existingUserItinerary) {
+      await prisma.userItinerary.create({
+        data: {
+          userId: senderId,
+          itineraryId: itineraryId,
+        },
+      });
+    }
+
+    // 3. 檢查發送者是否已經加入聊天室
+    const existingRoomMember = await prisma.roomMember.findFirst({
+      where: {
+        roomId: itinerary.roomId,
+        userId: senderId,
+      },
+    });
+
+    // 如果還沒加入,先將發送者加入聊天室
+    if (!existingRoomMember) {
+      await prisma.roomMember.create({
+        data: {
+          roomId: itinerary.roomId,
+          userId: senderId,
+        },
+      });
+    }
+
+    // 4. 建立邀請記錄
     const result = await prisma.itineraryInvitation.create({
       data: {
         itineraryId: itineraryId,
@@ -1124,9 +1174,11 @@ router.post("/invite", async (req: Request, res: Response) => {
         status: 0, //0 => pending
       },
     });
-    res.status(200).json({ suceess: true, message: "已發送邀請" });
+
+    res.status(200).json({ success: true, message: "已發送邀請" });
   } catch (err) {
     console.log(err);
+    res.status(500).json({ success: false, message: "伺服器錯誤" });
   }
 });
 
@@ -1180,8 +1232,8 @@ router.get("/all-invite/:userId", async (req: Request, res: Response) => {
 
 //更新旅程邀約
 router.patch("/invite", async (req: Request, res: Response) => {
-  const { invitationId, userId, invitationResponse } = req.body;
-  console.log("xxxx=>", { invitationId, userId, invitationResponse });
+  const { invitationId, invitationResponse } = req.body;
+  
   try {
     //1.先修改invitation的資料
     const result = await prisma.itineraryInvitation.update({
@@ -1200,9 +1252,12 @@ router.patch("/invite", async (req: Request, res: Response) => {
       });
     }
 
-    //2.如果接收 將該使用者加入 user_itineraries 中
+    //2.如果接收 將該使用者(receiverId)加入 user_itineraries 和聊天室中
     //0 pending 1 accept 2 reject
     if (invitationResponse === 1) {
+      // ✅ 使用 invitation 記錄中的 receiverId (被邀請人)
+      const receiverId = result.receiverId;
+
       // 查詢行程取得 roomId
       const itinerary = await prisma.itinerary.findUnique({
         where: { id: result.itineraryId },
@@ -1216,10 +1271,10 @@ router.patch("/invite", async (req: Request, res: Response) => {
         });
       }
 
-      // 檢查是否已經加入過行程
+      // 檢查被邀請人是否已經加入過行程
       const existingUserItinerary = await prisma.userItinerary.findFirst({
         where: {
-          userId: userId,
+          userId: receiverId,
           itineraryId: result.itineraryId,
         },
       });
@@ -1228,17 +1283,17 @@ router.patch("/invite", async (req: Request, res: Response) => {
       if (!existingUserItinerary) {
         await prisma.userItinerary.create({
           data: {
-            userId: userId,
+            userId: receiverId,
             itineraryId: result.itineraryId,
           },
         });
       }
 
-      // 檢查是否已經加入過聊天室
+      // 檢查被邀請人是否已經加入過聊天室
       const existingRoomMember = await prisma.roomMember.findFirst({
         where: {
           roomId: itinerary.roomId,
-          userId: userId,
+          userId: receiverId,
         },
       });
 
@@ -1247,7 +1302,7 @@ router.patch("/invite", async (req: Request, res: Response) => {
         await prisma.roomMember.create({
           data: {
             roomId: itinerary.roomId,
-            userId: userId,
+            userId: receiverId,
           },
         });
       }
