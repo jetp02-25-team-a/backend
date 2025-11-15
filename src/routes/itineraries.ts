@@ -919,6 +919,14 @@ router.get("/area", async (req: Request, res: Response) => {
             content: true,
           },
         },
+        Days: {
+          select: {
+            dayDate: true,
+            startTime: true,
+          },
+          orderBy: { dayDate: "asc" },
+          take: 1, // 只取第一天的日期用於過濾
+        },
       },
     });
     res.status(200).json({ success: true, data: allItinerary });
