@@ -256,13 +256,28 @@
 // export default router;
 
 // src/routes/article.route.ts
-
+// import type { Request, Response } from "express";
+// import { Router } from "express";
+import express from 'express';
 import type { Request, Response } from "express";
 import { Router } from "express";
 import upload from "../utils/upload-images-post.js";
 // Asumsi path ini mengarah ke instance Prisma Client
 import { prisma } from "../utils/prisma-pagination.js"; 
 import { jwtParseMiddleware, requireAuth } from "../middleware/jwt.js";
+
+import postRoutes from '../routes/postRoutes.js';
+
+ const app = express();
+app.use(express.json());
+
+app.use('/posts', postRoutes);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
 
 const router = Router();
 
