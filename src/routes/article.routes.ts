@@ -728,112 +728,437 @@
 
 
 // src/routes/article.route.ts
+import express from 'express';
 import { Router, type Request, type Response } from "express";
 import upload from "../utils/upload-images.js";
 import { prisma } from "../utils/prisma-pagination.js";
 import { jwtParseMiddleware, requireAuth } from "../middleware/jwt.js";
+ import postRoutes from '../routes/postRoutes.js';
 
 const router = Router();
 
+
+//  const app = express();
+// app.use(express.json());
+
+// app.use('/posts', postRoutes);
+
+// const PORT = process.env.PORT || 3000;
+// app.listen(PORT, () => {
+//   console.log(`Server running on port ${PORT}`);
+// });
+
+
+
+
+// Middleware untuk upload file
+const photoUpload = upload.array("photo");
+
+// Helper untuk Parsing ID (memastikan ID dari JWT/Request menjadi Int)
+const safeParseInt = (value: string | number | undefined | null): number | undefined => {
+    if (typeof value === 'string') {
+        const parsed = parseInt(value, 10);
+        return isNaN(parsed) ? undefined : parsed;
+    }
+    if (typeof value === 'number' && !isNaN(value)) {
+        return value;
+    }
+    return undefined;
+};
+
+
+
+
+// const router = express.Router();
+
+
+// /* ==========================================================
+//  * POST / - Buat artikel baru
+//  * ========================================================== */
+router.post("/", jwtParseMiddleware, requireAuth,photoUpload, async (req: Request, res: Response) => {
+    try {
+        const { title, content, locationId } = req.body;
+        // ⭐ PERBAIKAN: Pastikan userId dari JWT di-parse ke Int
+        const userId = safeParseInt(req.user?.user_id); 
+
+        if (!userId) return res.status(401).json({ success: false, message: "Unauthorized" });
+        if (!title || !content || !locationId) return res.status(400).json({ success: false, message: "title, content, dan locationId wajib diisi" });
+
+        const photos = (req.files as Express.Multer.File[] | undefined)?.map((f) => ({ url: `${f.filename}` })) || [];
+        const locationIntId = safeParseInt(locationId);
+
+        if (!locationIntId) return res.status(400).json({ success: false, message: "Invalid location ID format" });
+
+        const newPost = await prisma.post.create({
+            data: {
+                title,
+                content,
+                // Menggunakan ID yang sudah di-parse
+                User: { connect: { id: userId } }, 
+                Location: { connect: { id: locationIntId } },
+                Photos: { createMany: { data: photos } },
+            },
+            include: { Location: true, Photos: true },
+        });
+
+        res.status(201).json({
+            success: true,
+            message: "文章創建成功",
+            post: {
+                id: newPost.id.toString(),
+                title: newPost.title,
+                content: newPost.content,
+                location: newPost.Location?.city || "未知地點",
+                imgUrl: newPost.Photos?.[0]?.url || "",
+            },
+        });
+    } catch (error) {
+        console.error("❌ Error creating post:", error);
+        res.status(500).json({ success: false, message: "Failed to save post" });
+    }
+});
+
+// /* ==========================================================
+//  * PUT /:id - Update artikel
+//  * ========================================================== */
+router.put("/:id", jwtParseMiddleware, requireAuth, photoUpload, async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { title, content, locationId } = req.body;
+    // ⭐ PERBAIKAN: Pastikan userId dari JWT di-parse ke Int
+    const authenticatedUserId = safeParseInt(req.user?.user_id);
+
+    const postId = safeParseInt(id);
+    const locationIntId = safeParseInt(locationId);
+
+    if (!postId) return res.status(400).json({ success: false, message: "Invalid article ID" });
+    if (!title || !content || !locationId) return res.status(400).json({ success: false, message: "title, content, dan locationId wajib diisi" });
+    if (!authenticatedUserId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    try {
+        const existingPost = await prisma.post.findUnique({ where: { id: postId }, select: { userId: true } });
+        if (!existingPost) return res.status(404).json({ success: false, message: "Artikel tidak ditemukan" });
+        
+        // ⭐ PERBAIKAN: Bandingkan ID yang sudah di-parse
+        if (existingPost.userId !== authenticatedUserId) {
+            return res.status(403).json({ success: false, message: "Forbidden: bukan pemilik artikel." });
+        }
+
+        const newPhotos = (req.files as Express.Multer.File[] | undefined)?.map((f) => ({ url: `${f.filename}`, postId })) || [];
+
+        const updatedPost = await prisma.post.update({
+            where: { id: postId },
+            data: {
+                title,
+                content,
+                Location: locationIntId ? { connect: { id: locationIntId } } : undefined,
+                Photos: newPhotos.length > 0 ? { createMany: { data: newPhotos } } : undefined,
+            },
+            include: { User: true, Location: true, Photos: true },
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "文章編輯完成",
+            post: {
+                id: updatedPost.id.toString(),
+                title: updatedPost.title,
+                content: updatedPost.content,
+                location: updatedPost.Location?.city || "未知地點",
+                photos: updatedPost.Photos.map((p) => p.url),
+            },
+        });
+    } catch (error) {
+        console.error("❌ Error updating article:", error);
+        return res.status(500).json({ success: false, message: "編輯文章失敗" });
+    }
+});
+
+// /* ==========================================================
+//  * DELETE /:id - Hapus artikel
+//  * ========================================================== */
+router.delete("/:id", jwtParseMiddleware, requireAuth, async (req: Request, res: Response) => {
+    const { id } = req.params;
+    // ⭐ PERBAIKAN: Pastikan userId dari JWT di-parse ke Int
+    const authenticatedUserId = safeParseInt(req.user?.user_id);
+
+    const postId = safeParseInt(id);
+    if (!postId) return res.status(400).json({ success: false, message: "Invalid article ID" });
+    if (!authenticatedUserId) return res.status(401).json({ success: false, message: "Unauthorized" });
+
+    try {
+        const existingPost = await prisma.post.findUnique({ where: { id: postId }, select: { userId: true } });
+        if (!existingPost) return res.status(404).json({ success: false, message: "Artikel tidak ditemukan" });
+        
+        // ⭐ PERBAIKAN: Bandingkan ID yang sudah di-parse
+        if (existingPost.userId !== authenticatedUserId) {
+            return res.status(403).json({ success: false, message: "Forbidden: bukan pemilik artikel." });
+        }
+
+        // Asumsi relasi Photos dan Likes di set CASCADE DELETE di schema Prisma
+        await prisma.post.delete({ where: { id: postId } });
+
+        return res.status(200).json({ success: true, message: "文章刪除完成" });
+    } catch (error) {
+        console.error("❌ Error deleting article:", error);
+        return res.status(500).json({ success: false, message: "刪除文章失敗" });
+    }
+});
+
+// /* ==========================================================
+//  * GET /:id - Ambil satu artikel (Detail Page)
+//  * ========================================================== */
+// Catatan: Middleware jwtParseMiddleware TIDAK diperlukan di sini, tetapi bisa ditambahkan jika Anda ingin
+// mendapatkan data user saat melihat detail (untuk cek isLikedByMe).
+router.get("/:id", jwtParseMiddleware, async (req: Request, res: Response) => {
+    const { id } = req.params;
+    // ⭐ PERBAIKAN: Pastikan userId dari JWT di-parse ke Int
+    const authenticatedUserId = safeParseInt(req.user?.user_id); 
+
+    const postId = safeParseInt(id);
+    if (!postId) return res.status(400).json({ message: "Invalid post ID" });
+
+    try {
+        const post = await prisma.post.findUnique({
+            where: { id: postId },
+            include: { 
+                User: true, 
+                Location: true, 
+                Photos: true, 
+                // Seleksi hanya userId dari Likes untuk cek isLikedByMe
+                Likes: { select: { userId: true } } 
+            },
+        });
+        
+        if (!post) return res.status(404).json({ message: "Post not found" });
+
+        const isLikedByMe = authenticatedUserId ? post.Likes.some(like => like.userId === authenticatedUserId) : false;
+
+        const formatted = {
+            id: post.id.toString(), 
+            userId: post.userId.toString(), // Kirim sebagai string agar konsisten
+            title: post.title,
+            content: post.content,
+            location: post.Location?.city || "未知地點",
+            photos: post.Photos?.map((p) => p.url) || [],
+            likes: post.Likes?.length || 0, 
+            isLikedByMe: isLikedByMe, 
+        };
+
+        res.json(formatted);
+    } catch (error) {
+        console.error("❌ Error retrieving post:", error);
+        res.status(500).json({ message: "Error retrieving post" });
+    }
+});
+
+
+// /* ==========================================================
+//  * POST /:id/like - Tambah atau toggle like artikel
+//  * ========================================================== */
+router.post('/:id/like', jwtParseMiddleware, requireAuth, async (req: Request, res: Response) => {
+    const { id } = req.params;
+    // ⭐ PERBAIKAN: Pastikan userId dari JWT di-parse ke Int
+    const userId = safeParseInt(req.user?.user_id); 
+
+    if (!userId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    try {
+        const postId = safeParseInt(id);
+        if (!postId) return res.status(400).json({ success: false, message: 'Invalid article ID' });
+
+        // 1. Cek apakah pengguna sudah like (gunakan ID yang sudah di-parse)
+        const existingLike = await prisma.like.findFirst({
+            where: { postId, userId },
+        });
+
+        let likedStatus;
+
+        if (existingLike) {
+            // 2. Unlike (Gunakan ID Like)
+            await prisma.like.delete({ where: { id: existingLike.id } });
+            likedStatus = false;
+        } else {
+            // 3. Like (Pastikan Post ada sebelum mencoba membuat Like)
+            const postExists = await prisma.post.findUnique({ where: { id: postId }, select: { id: true } });
+            if (!postExists) return res.status(404).json({ success: false, message: 'Post not found' });
+            
+            await prisma.like.create({
+                data: { postId, userId },
+            });
+            likedStatus = true;
+        }
+
+        // 4. Hitung jumlah like terbaru
+        const newLikesCount = await prisma.like.count({ where: { postId } });
+            
+        return res.json({ 
+            success: true, 
+            liked: likedStatus, 
+            newLikesCount,
+            isLikedByMe: likedStatus
+        });
+
+    } catch (error) {
+        console.error('❌ Error liking article:', error);
+        res.status(500).json({ success: false, message: 'Failed to like article' });
+    }
+});
+
+// /* ==========================================================
+//  * GET / - Ambil semua artikel (List Page)
+//  * ========================================================== */
+// router.get("/", async (_req: Request, res: Response) => {
+//     try {
+//         const posts = await prisma.post.findMany({
+//             include: { Location: true, Photos: true, Likes: true },
+//             orderBy: { id: "desc" },
+//         });
+//         const cards = posts.map((p) => ({
+//             id: p.id.toString(),
+//             title: p.title,
+//             location: p.Location?.city || "未知地點",
+//             imgUrl: p.Photos?.[0]?.url || "",
+//             likesCount: p.Likes.length || 0,
+//         }));
+//         res.json(cards);
+//     } catch (error) {
+//         console.error("❌ Error fetching posts:", error);
+//         res.status(500).json({ success: false, message: "Failed to retrieve posts" });
+//     }
+// });
 /* ==========================================================
-    HELPER: Safe Parse Integer
+    HELPER
 ========================================================== */
-function safeParseInt(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const parsed = parseInt(value, 10);
+function safeInt(value: any): number | undefined {
+  const parsed = Number(value);
   return isNaN(parsed) ? undefined : parsed;
 }
+/* ==========================================================
+    4. UPDATE — PUT /article/:id
+========================================================== */
+router.put(
+  "/:id",
+  requireAuth,
+  upload.array("photos"),
+  async (req: Request, res: Response) => {
+    try {
+      const id = safeInt(req.params.id);
+      if (!id) return res.status(400).json({ message: "Invalid ID" });
+
+      const { title, content, locationId } = req.body;
+
+      // only allow owner to edit
+      const post = await prisma.post.findUnique({ where: { id } });
+      if (!post) return res.status(404).json({ message: "Post not found" });
+      if (post.userId !== req.user!.id)
+        return res.status(403).json({ message: "Unauthorized" });
+
+      const updated = await prisma.post.update({
+        where: { id },
+        data: {
+          title,
+          content,
+          locationId: Number(locationId),
+        },
+      });
+
+      // Save new photos if any
+      if (req.files && Array.isArray(req.files)) {
+        await prisma.photo.createMany({
+          data: req.files.map((file: any) => ({
+            postId: updated.id,
+            url: `/uploads/${file.filename}`,
+          })),
+        });
+      }
+
+      return res.json({
+        message: "Article updated successfully",
+        post: updated,
+      });
+    } catch (error) {
+      console.error("UPDATE ERROR:", error);
+      res.status(500).json({ message: "Failed to update article" });
+    }
+  }
+);
 
 /* ==========================================================
-    1. GET /article/ranking   (Harus di atas /:id)
+    5. DELETE — DELETE /article/:id
 ========================================================== */
-router.get("/ranking", async (req: Request, res: Response) => {
+router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
-    const page = safeParseInt(req.query.page as string) || 1;
-    const limit = safeParseInt(req.query.limit as string) || 10;
+    const id = safeInt(req.params.id);
+    if (!id) return res.status(400).json({ message: "Invalid ID" });
 
-    const posts = await prisma.post.findMany({
-      include: {
-        User: true,
-        Location: true,
-        Photos: true,
-        _count: { select: { Likes: true } },
-      },
-      orderBy: {
-        Likes: { _count: "desc" },
-      },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    // only allow owner to delete
+    const post = await prisma.post.findUnique({ where: { id } });
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    if (post.userId !== req.user!.id)
+      return res.status(403).json({ message: "Unauthorized" });
 
-    const totalPosts = await prisma.post.count();
-    const totalPages = Math.ceil(totalPosts / limit);
+    await prisma.photo.deleteMany({ where: { postId: id } });
+    await prisma.like.deleteMany({ where: { postId: id } });
+    await prisma.post.delete({ where: { id } });
 
-    res.json({
-      page,
-      limit,
-      totalPosts,
-      totalPages,
-      data: posts,
-    });
+    return res.json({ message: "Article deleted successfully" });
   } catch (err) {
-    res.status(500).json({ message: "Error fetching ranking posts" });
+    console.error("DELETE ERROR:", err);
+    return res.status(500).json({ message: "Failed to delete article" });
   }
 });
 
 /* ==========================================================
-    2. POST /article/:id/like   (Harus juga di atas /:id)
+    6. LIKE ARTICLE — POST /article/:id/like
 ========================================================== */
 router.post("/:id/like", requireAuth, async (req: Request, res: Response) => {
-  const id = safeParseInt(req.params.id);
-  if (!id) return res.status(400).json({ message: "Invalid post ID" });
-
   try {
-    // Create like record
-    await prisma.likes.create({
-      data: {
-        postId: id,
-        userId: req.user!.id,
-      },
+    const userId = req.user!.id;
+    const postId = Number(req.params.id);
+
+    // check duplicate like (unique constraint)
+    const exist = await prisma.like.findUnique({
+      where: { userId_postId: { userId, postId } },
     });
 
-    // Optional: update like count (if needed)
-    await prisma.post.update({
-      where: { id },
-      data: {
-        LikesCount: { increment: 1 },
-      },
+    if (exist) {
+      return res.status(400).json({ message: "Already liked" });
+    }
+
+    const like = await prisma.like.create({
+      data: { userId, postId },
     });
 
-    res.json({ message: "Liked" });
+    return res.json({ message: "Liked", like });
   } catch (err) {
-    res.status(500).json({ message: "Failed to like post" });
+    console.error("LIKE ERROR:", err);
+    return res.status(500).json({ message: "Like failed" });
   }
 });
 
 /* ==========================================================
-    3. GET /article/:id   (HARUS PALING BAWAH)
+    7. UNLIKE ARTICLE — DELETE /article/:id/like
 ========================================================== */
-router.get("/:id", jwtParseMiddleware, async (req: Request, res: Response) => {
-  const id = safeParseInt(req.params.id);
-  if (!id) return res.status(400).json({ message: "Invalid post ID" });
-
+router.delete("/:id/like", requireAuth, async (req: Request, res: Response) => {
   try {
-    const post = await prisma.post.findUnique({
-      where: { id },
-      include: {
-        User: true,
-        Location: true,
-        Photos: true,
-        _count: { select: { Likes: true } },
-      },
+    const userId = req.user!.id;
+    const postId = Number(req.params.id);
+
+    const exist = await prisma.like.findUnique({
+      where: { userId_postId: { userId, postId } },
     });
 
-    if (!post) return res.status(404).json({ message: "Post not found" });
+    if (!exist)
+      return res.status(400).json({ message: "You haven't liked this post" });
 
-    res.json(post);
+    await prisma.like.delete({
+      where: { userId_postId: { userId, postId } },
+    });
+
+    return res.json({ message: "Unliked" });
   } catch (err) {
-    res.status(500).json({ message: "Error fetching post" });
+    console.error("UNLIKE ERROR:", err);
+    return res.status(500).json({ message: "Unlike failed" });
   }
 });
 
