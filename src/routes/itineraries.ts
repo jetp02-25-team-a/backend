@@ -453,6 +453,7 @@ router.get("/itinerary-list", async (req: Request, res: Response) => {
 router.get("/search", async (req: Request, res: Response) => {
   const { place } = req.query;
   const keyword = typeof place === "string" ? place : "台北101";
+  console.log("keyword===>", keyword);
 
   try {
     const result = await prisma.attraction.findMany({
@@ -1533,7 +1534,9 @@ router.get("/stay-nearby/:place", async (req: Request, res: Response) => {
         longitude: { gte: minLng, lte: maxLng },
       },
       select: {
+        id: true,
         City: { select: { name: true } },
+        Images: { select: { url: true }, take: 1 },
         name: true,
         address: true,
         description: true,

@@ -1144,28 +1144,92 @@ function getRandomSubset<T>(array: T[], count: number): T[] {
 async function clearDatabase() {
   console.log("🔥 開始清除所有現有資料 (按外鍵依賴順序)...");
 
-  // 1. 交易/關聯層 (引用 Booking, RoomType, User, Accommodation)
-  await prisma.review.deleteMany(); // 引用 Booking, User, Accommodation
-  await prisma.bookingItem.deleteMany(); // 引用 Booking, RoomType
-
+  // ========== 第 1 層：最外層關聯表格 ==========
+  
+  // M1 旅行筆記
+  await prisma.messageBoard.deleteMany();
+  await prisma.photo.deleteMany();
+  await prisma.like.deleteMany();
+  
+  // M2 行程規劃
+  await prisma.expense.deleteMany();
+  await prisma.packingItem.deleteMany();
+  await prisma.tripPlanDetail.deleteMany();
+  await prisma.tripPlanPlace.deleteMany();
+  await prisma.tripPlanAccommodation.deleteMany();
+  
+  // M4 美食景點
+  await prisma.openingHour.deleteMany();
+  await prisma.history.deleteMany();
+  await prisma.rank.deleteMany();
+  await prisma.comment.deleteMany();
+  await prisma.favorite.deleteMany();
+  await prisma.placePhoto.deleteMany();
+  
+  // M5 尋找旅伴
+  await prisma.itineraryInvitation.deleteMany();
+  await prisma.itineraryComment.deleteMany();
+  await prisma.itineraryImage.deleteMany();
+  await prisma.itineraryNode.deleteMany();
+  await prisma.stayNode.deleteMany();
+  await prisma.article.deleteMany();
+  await prisma.message.deleteMany();
+  await prisma.roomMember.deleteMany();
+  await prisma.userItinerary.deleteMany();
+  await prisma.friendship.deleteMany();
+  
+  // M6 商城
+  await prisma.loginLog.deleteMany();
+  await prisma.pointsLog.deleteMany();
+  await prisma.cart.deleteMany();
+  await prisma.orderDetail.deleteMany();
+  await prisma.order.deleteMany();
+  
+  // ========== 第 2 層：中層實體 ==========
+  
+  // M1
+  await prisma.post.deleteMany();
+  
+  // M2
+  await prisma.tripPlan.deleteMany();
+  await prisma.tripPlanList.deleteMany();
+  await prisma.tripPlanDetailList.deleteMany();
+  
+  // M3 住宿交通
+  await prisma.review.deleteMany();
+  await prisma.bookingItem.deleteMany();
   await prisma.roomRate.deleteMany();
   await prisma.roomInventory.deleteMany();
-
-  await prisma.booking.deleteMany(); // 引用 User, Accommodation
-  await prisma.roomTypeAmenity.deleteMany(); // 引用 RoomType, Amenity
-  await prisma.favoriteAccommodation.deleteMany(); // 引用 User, Accommodation
-
-  // 2. 住宿細節層 (引用 Accommodation)
+  await prisma.booking.deleteMany();
+  await prisma.roomTypeAmenity.deleteMany();
+  await prisma.favoriteAccommodation.deleteMany();
   await prisma.contact.deleteMany();
   await prisma.accommodationImage.deleteMany();
-  await prisma.accommodationAmenity.deleteMany(); // 引用 Amenity (但 Amenity 沒有引用其他表格)
-
-  // 3. 主要實體層
-  await prisma.roomType.deleteMany(); // 引用 Accommodation
-  await prisma.accommodation.deleteMany(); // 引用 City, AccommodationType
-
-  // 4. 核心/基礎層 (不被其他表格引用)
+  await prisma.accommodationAmenity.deleteMany();
+  await prisma.roomType.deleteMany();
+  await prisma.accommodation.deleteMany();
+  
+  // M4
+  await prisma.place.deleteMany();
+  
+  // M5
+  await prisma.itineraryDay.deleteMany();
+  await prisma.itinerary.deleteMany();
+  await prisma.room.deleteMany();
+  await prisma.googleMapPlace.deleteMany();
+  await prisma.attraction.deleteMany();
+  
+  // M6
+  await prisma.productPic.deleteMany();
+  await prisma.productVariant.deleteMany();
+  await prisma.product.deleteMany();
+  
+  // ========== 第 3 層：基礎資料表 ==========
+  
   await prisma.user.deleteMany();
+  await prisma.location.deleteMany();
+  await prisma.expenseType.deleteMany();
+  await prisma.packingItemTemplate.deleteMany();
   await prisma.amenity.deleteMany();
   await prisma.accommodationType.deleteMany();
   await prisma.city.deleteMany();
