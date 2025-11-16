@@ -67,6 +67,11 @@ export interface AccommodationDTO {
   city: string;
   type: string;
 
+  reviewSummary: {
+    averageRating: number | null;
+    reviewCount: number;
+  };
+
   images: any[];
   contacts: any[];
 

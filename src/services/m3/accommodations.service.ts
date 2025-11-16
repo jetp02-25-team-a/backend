@@ -158,7 +158,17 @@ export async function findAccommodationById(
 
   if (!data) return null;
 
-  return mapToAccommodationDTO(data);
+  const agg = await prisma.review.aggregate({
+    where: { accommodationId: id },
+    _avg: { ratingScore: true },
+    _count: { _all: true },
+  });
+
+  const reviewSummary = {
+    averageRating: agg._count._all > 0 ? agg._avg.ratingScore : null,
+    reviewCount: agg._count._all,
+  };
+  return mapToAccommodationDTO({ ...data, reviewSummary });
 }
 
 // 搜尋查詢
