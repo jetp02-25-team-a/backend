@@ -101,6 +101,7 @@ router.get("/allmessage", async (req: Request, res: Response) => {
             isRead: true,
             senderId: true,
             receiverId: true,
+            messageType: true,
           },
           orderBy: {
             createdAt: "desc", //搭配findFirst ＝ 找到最新
@@ -146,15 +147,16 @@ router.get("/allmessage", async (req: Request, res: Response) => {
             content: true,
             senderId: true,
             createdAt: true,
+            messageType: true,
           },
           orderBy: {
             createdAt: "desc",
           },
         });
-        
+
         // 整理房間成員資訊
         const members = room.Room.Members.map((m) => m.User);
-        
+
         return {
           roomData: {
             id: room.Room.id,
