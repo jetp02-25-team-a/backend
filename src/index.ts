@@ -20,6 +20,7 @@ import placeRouter from "./routes/place";
 import featuredRouter from "./routes/place-features";
 import searchRouter from "./routes/place-search";
 import favoriteRouter from "./routes/place-favorite";
+import randomImagesRouter from "./routes/place-random-images";
 import mapRouter from "./routes/place-leaflet";
 import articleRouter from "./routes/article.routes";
 import likeroutes from "./routes/likeroutes";
@@ -39,14 +40,7 @@ import { globalErrorHandler } from "./middleware";
 // 建立伺服器主物件
 const app = express();
 
-// 圖片上傳靜態位置
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-app.use(
-  "/uploads",
-  express.static(path.join(__dirname, "..", "public", "uploads"))
-);
+app.use("/images", express.static(path.join(process.cwd(), "public/images")));
 
 // CORS 白名單設定
 const allowedOrigins = [
@@ -134,6 +128,7 @@ app.use("/api/place/featured", featuredRouter);
 app.use("/api/place/search", searchRouter);
 app.use("/api/place", placeRouter);
 app.use("/api/favorite", favoriteRouter);
+app.use("/api/random-images", randomImagesRouter);
 app.use("/api/article", articleRouter);
 app.use("/api/itineraries", itinerariesRouter);
 app.use("/api", mallRouter);
