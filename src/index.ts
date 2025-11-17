@@ -26,7 +26,7 @@ import likeroutes from "./routes/likeroutes";
 import mallRouter from "./routes/api-mall";
 import itinerariesRouter from "./routes/itineraries";
 
-import { m3AccommodationsRoute, m3Favorite } from "./routes/m3";
+import { m3AccommodationsRoute, m3Booking, m3Favorite } from "./routes/m3";
 
 import http from "http";
 import { Server } from "socket.io";
@@ -142,6 +142,7 @@ app.use("/api/likeroutes", likeroutes);
 //m3 routes
 app.use("/api/m3", m3AccommodationsRoute);
 app.use("/api/m3", m3Favorite);
+app.use("/api/m3", m3Booking);
 
 // --------------------------------------------------------------------
 

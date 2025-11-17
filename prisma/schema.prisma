@@ -600,8 +600,8 @@ model Review {
   userId Int  @map("user_id")
   User   User @relation(fields: [userId], references: [id])
 
-  bookingId Int     @unique @map("booking_id")
-  Booking   Booking @relation(fields: [bookingId], references: [id])
+  bookingId Int?     @unique @map("booking_id")
+  Booking   Booking? @relation(fields: [bookingId], references: [id])
 
   ratingScore Int     @map("rating_score")
   comment     String? @db.Text
