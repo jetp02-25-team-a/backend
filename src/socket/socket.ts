@@ -332,16 +332,33 @@ export const chatSocket = (io: Server) => {
       console.log("👋 用戶離開協作:", data);
     });
 
-    // 清理函數
-    // return () => {
-    //   console.log('🔌 離開行程協作房間:', itineraryId);
-    //   socket.emit('itinerary:leave', { itineraryId, userId: user.id });
-    //   socket.off('itinerary:nodeAdded');
-    //   socket.off('itinerary:nodeDeleted');
-    //   socket.off('itinerary:dayAdded');
-    //   socket.off('itinerary:userJoined');
-    //   socket.off('itinerary:userLeft');
-    // };
+    // 新增住宿 StayNode 的 socket 事件
+    socket.on("itinerary:addStayNode", (data) => {
+      const { itineraryId } = data;
+      const roomName = `itinerary_${itineraryId}`;
+      // 廣播給同房間其他用戶
+      socket.to(roomName).emit("itinerary:addStayNode", data);
+    });
+
+    // 清理函數（正確移除監聽，避免 undefined 變數）
+    socket.on("disconnect", () => {
+      // 這裡可以根據 socket.data 取得房間資訊
+      if (socket.data.currentItinerary) {
+        const roomName = `itinerary_${socket.data.currentItinerary}`;
+        console.log("🔌 離開行程協作房間:", roomName);
+        socket.emit("itinerary:leave", {
+          itineraryId: socket.data.currentItinerary,
+          userId: socket.data.userId,
+        });
+      }
+      // 移除所有自訂事件監聽
+      socket.removeAllListeners("itinerary:nodeAdded");
+      socket.removeAllListeners("itinerary:nodeDeleted");
+      socket.removeAllListeners("itinerary:dayAdded");
+      socket.removeAllListeners("itinerary:userJoined");
+      socket.removeAllListeners("itinerary:userLeft");
+      // 你也可以根據需要移除其他事件
+    });
 
     // 使用者離線
     socket.on("disconnect", () => {
