@@ -72,6 +72,7 @@ export const getUserFavorites = async (req, res) => {
             ).toFixed(1)
           : "—",
       favoritedAt: f.createdAt,
+      introduce: f.Place.introduce,
     }));
 
     res.json({ success: true, data: formatted });

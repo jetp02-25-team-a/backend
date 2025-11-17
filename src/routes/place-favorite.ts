@@ -41,6 +41,7 @@ router.get("/", async (req, res) => {
         photo: f.Place.Photos[0]?.url ?? "/placeholder.jpg",
         avgScore, // number | null
         favoritedAt: f.createdAt,
+        introduce: f.Place.introduce,
       };
     });
 
