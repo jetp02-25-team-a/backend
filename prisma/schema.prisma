@@ -392,6 +392,8 @@ model Accommodation {
   Images                 AccommodationImage[]
   TripPlanAccommodations TripPlanAccommodation[]
 
+  StayNodes StayNode[] // ← 新增這行
+
   @@index([cityId])
   @@map("accommodations")
 }
@@ -937,7 +939,8 @@ model StayNode {
   accommodationId Int @map("accommodation_id")
   status          Int
 
-  Day ItineraryDay @relation(fields: [itineraryDayId], references: [id])
+  Day           ItineraryDay  @relation(fields: [itineraryDayId], references: [id])
+  Accommodation Accommodation @relation(fields: [accommodationId], references: [id])
 
   @@map("stay_nodes")
 }
@@ -1027,7 +1030,7 @@ model Attraction {
   addrStreet      String? @map("addr_street")
   addrFull        String? @map("addr_full")
 
-  image String?
+  image String? @db.Text
 
   // ✅ 修正為 ItineraryNode[]（你之前拼錯 ItinerarieNode）
   nodes ItineraryNode[]

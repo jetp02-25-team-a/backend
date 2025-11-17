@@ -3,6 +3,8 @@ import type { Request, Response } from "express";
 import { json, success } from "zod";
 import jwt, { type JwtPayload } from "jsonwebtoken";
 import { prisma } from "../utils/prisma-pagination";
+import upload from "../utils/upload-images-chat";
+import { requireAuth, jwtParseMiddleware } from "../middleware/jwt";
 
 const router = express.Router();
 
@@ -44,6 +46,7 @@ router.get("/allmessage", async (req: Request, res: Response) => {
           ],
         },
         select: {
+          messageType: true,
           content: true,
           createdAt: true,
           updatedAt: true,
@@ -73,6 +76,7 @@ router.get("/allmessage", async (req: Request, res: Response) => {
           updatedAt: true,
           receiverId: true,
           senderId: true,
+          messageType: true,
           Sender: {
             select: {
               id: true,
@@ -145,6 +149,7 @@ router.get("/messages/room/:roomId", async (req: Request, res: Response) => {
         createdAt: true,
         updatedAt: true,
         senderId: true,
+        messageType: true,
         Sender: {
           select: {
             id: true,
@@ -157,7 +162,7 @@ router.get("/messages/room/:roomId", async (req: Request, res: Response) => {
         updatedAt: "asc",
       },
     });
-    console.log("messages===>", messages);
+
     res.status(200).json({ success: true, data: messages });
   } catch (err) {
     console.log(err);
@@ -195,7 +200,7 @@ router.post("/mark-read-room", async (req: Request, res: Response) => {
   try {
     await prisma.message.updateMany({
       where: {
-        roomId: roomId,
+        roomId: +roomId,
         senderId: { not: userId },
         isRead: false,
       },
@@ -210,5 +215,42 @@ router.post("/mark-read-room", async (req: Request, res: Response) => {
     res.status(500).json({ success: false, message: "伺服器錯誤" });
   }
 });
+
+//視窗的圖片上傳
+
+// 單張圖片上傳
+router.post(
+  "/upload",
+  jwtParseMiddleware,
+  requireAuth,
+  upload.single("image"),
+  async (req: Request, res: Response) => {
+    const userId = req.user!.user_id; // 已保證存在
+    const filename = req.file?.filename; //檔案名稱
+    const { roomId, receiverId } = req.body; //接收者id 或 房間id
+
+    if (!filename) {
+      return res.status(400).json({ message: "未上傳檔案" });
+    }
+    //1.創建新的對話紀錄 且類型設定為image 並將檔案名稱存在content欄位
+    const result = await prisma.message.create({
+      data: {
+        senderId: userId,
+        content: filename,
+        messageType: "image",
+        roomId: +roomId || null, // 沒有就存 null
+        receiverId: +receiverId || null, // 團體視窗就沒有接收者
+      },
+    });
+    if (result) {
+      console.log("圖片訊息已存入資料庫:", result);
+      // 上傳成功後，檔案資訊在 req.file
+      return res.json({ filename: req.file?.filename });
+    }
+
+    // 上傳失敗
+    return res.json({ message: "上傳失敗" });
+  }
+);
 
 export default router;

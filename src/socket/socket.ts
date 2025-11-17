@@ -27,48 +27,48 @@ export const chatSocket = (io: Server) => {
     // console.log("目前使用者 session:", session?.id);
 
     // 接收訊息
-    socket.on("chat", async (msg, callback) => {
-      let savedMessage;
-      //收到訊息: { providerId: 4, acceptId: 7, content: 'wwwww' }
-      try {
-        //房間處理
-        if (msg.roomId) {
-          const message = await prisma.message.create({
-            data: {
-              senderId: msg.providerId,
-              roomId: socket.data.friendId,
-              content: msg.content,
-              messageType: "text",
-            },
-          });
-          savedMessage = message;
-        } else {
-          //處理個人
-          const message = await prisma.message.create({
-            data: {
-              senderId: msg.providerId,
-              receiverId: socket.data.userId,
-              content: msg.content,
-              messageType: "text",
-            },
-          });
-          savedMessage = message;
-          console.log("收到！！！個人訊息已儲存:", message);
-        }
-        io.emit("public", savedMessage); // 廣播給所有連線者
-        //發送給前端觸發重新取得訊息
-        io.emit("newMessage", {
-          roomId: msg.roomId,
-          friendId: msg.acceptId,
-        });
+    // socket.on("chat", async (msg, callback) => {
+    //   let savedMessage;
+    //   //收到訊息: { providerId: 4, acceptId: 7, content: 'wwwww' }
+    //   try {
+    //     //房間處理
+    //     if (msg.roomId) {
+    //       const message = await prisma.message.create({
+    //         data: {
+    //           senderId: msg.providerId,
+    //           roomId: socket.data.friendId,
+    //           content: msg.content,
+    //           messageType: "text",
+    //         },
+    //       });
+    //       savedMessage = message;
+    //     } else {
+    //       //處理個人
+    //       const message = await prisma.message.create({
+    //         data: {
+    //           senderId: msg.providerId,
+    //           receiverId: socket.data.userId,
+    //           content: msg.content,
+    //           messageType: "text",
+    //         },
+    //       });
+    //       savedMessage = message;
+    //       console.log("收到！！！個人訊息已儲存:", message);
+    //     }
+    //     io.emit("public", savedMessage); // 廣播給所有連線者
+    //     //發送給前端觸發重新取得訊息
+    //     io.emit("newMessage", {
+    //       roomId: msg.roomId,
+    //       friendId: msg.acceptId,
+    //     });
 
-        //  回傳成功訊息給前端 (這會觸發前端的 callback)
-        if (callback) callback({ success: true, message: "訊息已送出" });
-      } catch (err) {
-        console.error("訊息儲存失敗:", err);
-        if (callback) callback({ success: false, message: "伺服器錯誤" });
-      }
-    });
+    //     //  回傳成功訊息給前端 (這會觸發前端的 callback)
+    //     if (callback) callback({ success: true, message: "訊息已送出" });
+    //   } catch (err) {
+    //     console.error("訊息儲存失敗:", err);
+    //     if (callback) callback({ success: false, message: "伺服器錯誤" });
+    //   }
+    // });
 
     //行程相關
 
@@ -224,56 +224,95 @@ export const chatSocket = (io: Server) => {
     // 接收訊息（整合後的版本）
     socket.on("chat", async (msg, callback) => {
       let savedMessage;
-
       try {
-        // 房間聊天處理
         if (msg.roomId) {
           const message = await prisma.message.create({
             data: {
               senderId: msg.providerId,
-              roomId: msg.roomId, // 使用傳入的 roomId 而不是 socket.data.friendId
+              roomId: msg.roomId,
               content: msg.content,
               messageType: "text",
             },
           });
           savedMessage = message;
-
-          // 廣播給聊天房間內的所有用戶（排除發送者）
           const chatRoomName = `chat_${msg.roomId}`;
           socket.to(chatRoomName).emit("newMessage", savedMessage);
           socket
             .to(chatRoomName)
             .emit("message:refetch", { roomId: msg.roomId });
-
-          console.log(`群組訊息已儲存並廣播到房間: ${chatRoomName}`);
         } else {
-          // 個人聊天處理
           const message = await prisma.message.create({
             data: {
               senderId: msg.providerId,
-              receiverId: msg.acceptId, // 使用傳入的 acceptId
+              receiverId: msg.acceptId,
               content: msg.content,
               messageType: "text",
             },
           });
           savedMessage = message;
-
-          // 發送給特定用戶（這裡需要根據您的用戶-socket對應邏輯調整）
           socket.to(msg.acceptId).emit("newMessage", savedMessage);
           socket
             .to(msg.acceptId)
             .emit("message:refetch", { friendId: msg.acceptId });
-
-          console.log("個人訊息已儲存:", message);
         }
-
-        // 回傳成功訊息給前端
         if (callback) callback({ success: true, message: "訊息已送出" });
       } catch (err) {
         console.error("訊息儲存失敗:", err);
         if (callback) callback({ success: false, message: "伺服器錯誤" });
       }
     });
+    // socket.on("chat", async (msg, callback) => {
+    //   let savedMessage;
+
+    //   try {
+    //     // 房間聊天處理
+    //     if (msg.roomId) {
+    //       const message = await prisma.message.create({
+    //         data: {
+    //           senderId: msg.providerId,
+    //           roomId: msg.roomId, // 使用傳入的 roomId 而不是 socket.data.friendId
+    //           content: msg.content,
+    //           messageType: "text",
+    //         },
+    //       });
+    //       savedMessage = message;
+
+    //       // 廣播給聊天房間內的所有用戶（排除發送者）
+    //       const chatRoomName = `chat_${msg.roomId}`;
+    //       socket.to(chatRoomName).emit("newMessage", savedMessage);
+    //       socket
+    //         .to(chatRoomName)
+    //         .emit("message:refetch", { roomId: msg.roomId });
+
+    //       console.log(`群組訊息已儲存並廣播到房間: ${chatRoomName}`);
+    //     } else {
+    //       // 個人聊天處理
+    //       const message = await prisma.message.create({
+    //         data: {
+    //           senderId: msg.providerId,
+    //           receiverId: msg.acceptId, // 使用傳入的 acceptId
+    //           content: msg.content,
+    //           messageType: "text",
+    //         },
+    //       });
+    //       savedMessage = message;
+
+    //       // 發送給特定用戶（這裡需要根據您的用戶-socket對應邏輯調整）
+    //       socket.to(msg.acceptId).emit("newMessage", savedMessage);
+    //       socket
+    //         .to(msg.acceptId)
+    //         .emit("message:refetch", { friendId: msg.acceptId });
+
+    //       console.log("個人訊息已儲存:", message);
+    //     }
+
+    //     // 回傳成功訊息給前端
+    //     if (callback) callback({ success: true, message: "訊息已送出" });
+    //   } catch (err) {
+    //     console.error("訊息儲存失敗:", err);
+    //     if (callback) callback({ success: false, message: "伺服器錯誤" });
+    //   }
+    // });
 
     //
     // 後端需要支援聊天房間加入（與行程房間分開）
@@ -293,16 +332,33 @@ export const chatSocket = (io: Server) => {
       console.log("👋 用戶離開協作:", data);
     });
 
-    // 清理函數
-    // return () => {
-    //   console.log('🔌 離開行程協作房間:', itineraryId);
-    //   socket.emit('itinerary:leave', { itineraryId, userId: user.id });
-    //   socket.off('itinerary:nodeAdded');
-    //   socket.off('itinerary:nodeDeleted');
-    //   socket.off('itinerary:dayAdded');
-    //   socket.off('itinerary:userJoined');
-    //   socket.off('itinerary:userLeft');
-    // };
+    // 新增住宿 StayNode 的 socket 事件
+    socket.on("itinerary:addStayNode", (data) => {
+      const { itineraryId } = data;
+      const roomName = `itinerary_${itineraryId}`;
+      // 廣播給同房間其他用戶
+      socket.to(roomName).emit("itinerary:addStayNode", data);
+    });
+
+    // 清理函數（正確移除監聽，避免 undefined 變數）
+    socket.on("disconnect", () => {
+      // 這裡可以根據 socket.data 取得房間資訊
+      if (socket.data.currentItinerary) {
+        const roomName = `itinerary_${socket.data.currentItinerary}`;
+        console.log("🔌 離開行程協作房間:", roomName);
+        socket.emit("itinerary:leave", {
+          itineraryId: socket.data.currentItinerary,
+          userId: socket.data.userId,
+        });
+      }
+      // 移除所有自訂事件監聽
+      socket.removeAllListeners("itinerary:nodeAdded");
+      socket.removeAllListeners("itinerary:nodeDeleted");
+      socket.removeAllListeners("itinerary:dayAdded");
+      socket.removeAllListeners("itinerary:userJoined");
+      socket.removeAllListeners("itinerary:userLeft");
+      // 你也可以根據需要移除其他事件
+    });
 
     // 使用者離線
     socket.on("disconnect", () => {
