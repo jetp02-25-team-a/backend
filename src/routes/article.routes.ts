@@ -256,17 +256,54 @@
 // export default router;
 
 // src/routes/article.route.ts
+// import type { Request, Response } from "express";
+// import { Router } from "express";
+// import express from 'express';
+// import type { Request, Response } from "express";
+// import { Router } from "express";
+// import upload from "../utils/upload-images-post.js";
+// // Asumsi path ini mengarah ke instance Prisma Client
+// import { prisma } from "../utils/prisma-pagination.js"; 
+// import { jwtParseMiddleware, requireAuth } from "../middleware/jwt.js";
 
-import type { Request, Response } from "express";
-import { Router } from "express";
-import upload from "../utils/upload-images-post.js";
-// Asumsi path ini mengarah ke instance Prisma Client
-import { prisma } from "../utils/prisma-pagination.js"; 
-import { jwtParseMiddleware, requireAuth } from "../middleware/jwt.js";
+// import postRoutes from '../routes/postRoutes.js';
 
-const router = Router();
+//  const app = express();
+// app.use(express.json());
 
-// Middleware untuk upload file
+// app.use('/posts', postRoutes);
+
+// const PORT = process.env.PORT || 3000;
+// app.listen(PORT, () => {
+//   console.log(`Server running on port ${PORT}`);
+// });
+
+
+// const router = Router();
+
+// // Middleware untuk upload file
+// const photoUpload = upload.array("photo");
+
+// // Helper untuk Parsing ID (memastikan ID dari JWT/Request menjadi Int)
+// const safeParseInt = (value: string | number | undefined | null): number | undefined => {
+//     if (typeof value === 'string') {
+//         const parsed = parseInt(value, 10);
+//         return isNaN(parsed) ? undefined : parsed;
+//     }
+//     if (typeof value === 'number' && !isNaN(value)) {
+//         return value;
+//     }
+//     return undefined;
+// };
+
+import express from "express"
+import type { Request, Response,NextFunction } from "express";
+import { jwtParseMiddleware, requireAuth } from "../middleware";
+import upload from '../utils/upload-images-post'
+import { prisma } from "../utils/prisma-pagination.js";
+
+const router = express.Router();
+
 const photoUpload = upload.array("photo");
 
 // Helper untuk Parsing ID (memastikan ID dari JWT/Request menjadi Int)
@@ -281,11 +318,10 @@ const safeParseInt = (value: string | number | undefined | null): number | undef
     return undefined;
 };
 
-
 /* ==========================================================
  * POST / - Buat artikel baru
  * ========================================================== */
-router.post("/", jwtParseMiddleware, requireAuth, photoUpload, async (req: Request, res: Response) => {
+router.post("/", jwtParseMiddleware, requireAuth,photoUpload, async (req: Request, res: Response) => {
     try {
         const { title, content, locationId } = req.body;
         // ⭐ PERBAIKAN: Pastikan userId dari JWT di-parse ke Int
