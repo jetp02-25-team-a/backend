@@ -8,8 +8,11 @@ import {
 import type {
   AccommodationDTO,
   AccommodationListDTO,
+  ReviewDTO,
   SearchParams,
+  UserDTO,
 } from "../../interfaces/m3";
+import { NotFoundError } from "../../lib";
 
 // 列表查詢 (卡片)
 export async function findAccommodationsList(
@@ -158,7 +161,17 @@ export async function findAccommodationById(
 
   if (!data) return null;
 
-  return mapToAccommodationDTO(data);
+  const agg = await prisma.review.aggregate({
+    where: { accommodationId: id },
+    _avg: { ratingScore: true },
+    _count: { _all: true },
+  });
+
+  const reviewSummary = {
+    averageRating: agg._count._all > 0 ? agg._avg.ratingScore : null,
+    reviewCount: agg._count._all,
+  };
+  return mapToAccommodationDTO({ ...data, reviewSummary });
 }
 
 // 搜尋查詢
@@ -200,3 +213,109 @@ export async function findAccommodationsBySearch(
 
   return { data: result, meta: safeMeta };
 }
+
+// 評論列表
+export const getReviewsByAccommodationId = async (
+  accommodationId: number,
+  page: number = 1,
+  limit: number = 5
+): Promise<{ data: ReviewDTO[]; meta: any }> => {
+  // 1. 檢查住宿是否存在 (關鍵：使用 findUnique)
+  const accommodationExists = await prisma.accommodation.findUnique({
+    where: { id: accommodationId },
+    select: { id: true },
+  });
+
+  if (!accommodationExists) {
+    // 如果住宿不存在，拋出 NotFoundError
+    throw new NotFoundError(`ID 為 ${accommodationId} 的住宿不存在。`);
+  }
+
+  // 2. 使用 prisma-extension-pagination 的 paginate 方法
+  const [data, meta] = await prisma.review
+    .paginate({
+      where: { accommodationId: accommodationId },
+      orderBy: { reviewDate: "desc" },
+      // 這裡使用 select 排除 updatedAt 和 deletedAt，並只選擇需要的欄位
+      select: {
+        id: true,
+        ratingScore: true,
+        comment: true,
+        reviewDate: true,
+        User: {
+          select: { id: true, fullName: true, nickname: true, avatar: true },
+        },
+      },
+    })
+    .withPages({
+      page: page,
+      // 如果傳入 limit 則使用，否則使用擴充套件的預設 25
+      limit: limit,
+      // 由於您在 extension 中設定了 includePageCount: true，這裡會自動計算總頁數
+    })
+    .catch(() => [[], {}]);
+
+  const safeData = Array.isArray(data)
+    ? data.map((item) => ({
+        id: item.id,
+        ratingScore: item.ratingScore,
+        comment: item.comment ?? "",
+        reviewDate: item.reviewDate,
+        user: {
+          id: item.User?.id ?? 0,
+          fullName: item.User?.fullName ?? "",
+          nickname: item.User?.nickname ?? "",
+          avatar: item.User?.avatar ?? null,
+        },
+      }))
+    : [];
+  const safeMeta = meta ?? {
+    currentPage: 0, // 頁碼設為 0 或 1 (如果您的前端從 1 開始，設為 1 也可以)
+    isFirstPage: true, // 沒有資料，所以技術上可以視為是第一頁
+    isLastPage: true, // 沒有資料，所以也是最後一頁
+    pageCount: 0, // 總頁數為 0
+    totalCount: 0, // 總筆數為 0
+    previousPage: null, // 沒有前一頁
+    nextPage: null, // 沒有下一頁
+  };
+
+  // 4. 重組返回結構，符合 PaginatedReviewsResult 介面
+  const paginatedResult: { data: ReviewDTO[]; meta: any } = {
+    data: safeData, // 替換為您的 Review 類型
+    meta: safeMeta,
+  };
+
+  return paginatedResult;
+};
+
+export const addReviewToAccommodation = async (
+  accommodationId: number,
+  review: { content: string; rating: number; userId: number }
+): Promise<ReviewDTO> => {
+  const created = await prisma.review.create({
+    data: {
+      accommodationId,
+      userId: review.userId,
+      ratingScore: review.rating,
+      comment: review.content,
+    },
+    include: {
+      User: {
+        select: {
+          id: true,
+          fullName: true,
+          nickname: true,
+          avatar: true,
+        },
+      },
+    },
+  });
+
+  return {
+    id: created.id,
+    ratingScore: created.ratingScore,
+    comment: created.comment || "",
+    reviewDate: created.reviewDate,
+    user: created.User as UserDTO,
+  };
+};

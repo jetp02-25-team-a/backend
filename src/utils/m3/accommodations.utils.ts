@@ -191,5 +191,9 @@ export async function mapToAccommodationDTO(
     amenities: accommodationAmenities,
     roomTypes: roomTypes,
     reviews: reviews,
+    reviewSummary: data.reviewSummary ?? {
+      averageRating: null,
+      reviewCount: 0,
+    },
   };
 }
