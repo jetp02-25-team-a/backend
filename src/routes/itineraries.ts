@@ -215,19 +215,59 @@ router.get("/detail", async (req: Request, res: Response) => {
           },
           orderBy: { order: "asc" },
         },
-        StayNodes: true,
+        StayNodes: {
+          where: { status: 1 },
+          select: {
+            id: true,
+            accommodationId: true,
+            Accommodation: {
+              select: {
+                id: true,
+                name: true,
+                address: true,
+                description: true,
+                latitude: true,
+                longitude: true,
+                Images: {
+                  select: {
+                    url: true,
+                  },
+                },
+              },
+              // select: {
+              //   name: true,
+              //   image: true,
+              //   // 其他欄位
+              // },
+            },
+          },
+        },
+        // StayNodes: true,
+        // Itinerary: {
+        //   select: {
+        //     title: true,
+        //   },
+        // },
       },
       orderBy: { dayDate: "asc" },
     });
 
     // ✅ 轉換資料格式：將 Attraction 重新命名為 Place
+    // const transformedResult = result.map((day) => ({
+    //   ...day,
+    //   Nodes: day.Nodes.map((node) => ({
+    //     ...node,
+    //     Place: node.Attraction, // ✅ 將 Attraction 重新命名為 Place
+    //     // 不要包含原本的 Attraction
+    //   })),
+    // }));
     const transformedResult = result.map((day) => ({
       ...day,
-      Nodes: day.Nodes.map((node) => ({
+      Nodes: day.Nodes.map(({ Attraction, ...node }) => ({
         ...node,
-        Place: node.Attraction, // ✅ 將 Attraction 重新命名為 Place
-        // 不要包含原本的 Attraction
+        Place: Attraction,
       })),
+      StayNodes: day.StayNodes, // 保留原本住宿資料
     }));
 
     res.status(200).json({ success: true, data: transformedResult });
@@ -519,33 +559,28 @@ interface Itinerary {
   [key: string]: any; // 👈 這行是關鍵，允許用字串 key 存取屬性
 }
 
-router.post("/save", async (req: Request, res: Response) => {
+router.post("/save", async (req, res) => {
   try {
     const { itineraryData: newItinerary } = req.body;
 
     console.log("=== /save API 收到的資料 ===");
     console.log("newItinerary:", JSON.stringify(newItinerary, null, 2));
 
-    //=======================================================
-    // ✅ 0. 檢查參數
-    //=======================================================
+    // 0. 檢查參數
     const itineraryId = newItinerary?.[0]?.itineraryId;
     if (!itineraryId) {
       return res.status(400).json({ error: "缺少 itineraryId" });
     }
 
-    //=======================================================
-    // ✅ 1. 抓現有行程（只抓 status=1 的）
-    //=======================================================
+    // 1. 抓現有行程（只抓 status=1 的）
     const oldItinerary = await prisma.itinerary.findFirst({
       where: { id: itineraryId, status: 1 },
       include: {
         Days: {
           where: { status: 1 },
           include: {
-            Nodes: {
-              where: { status: 1 },
-            },
+            Nodes: { where: { status: 1 } },
+            StayNodes: { where: { status: 1 } }, // 新增住宿
           },
           orderBy: { dayDate: "asc" },
         },
@@ -556,16 +591,12 @@ router.post("/save", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "舊行程不存在" });
     }
 
-    //=======================================================
-    // ✅ 2. 聰明更新：只更新有變化的部分
-    //=======================================================
+    // 2. 聰明更新：只更新有變化的部分
     for (const newDay of newItinerary) {
-      // 找到對應的舊 Day
       const oldDay = oldItinerary.Days.find((d) => d.id === newDay.id);
 
       if (!oldDay) {
-        // 新增的 Day - 創建新的
-        console.log("🆕 創建新的 Day:", newDay.dayDate);
+        // 新增的 Day
         const createdDay = await prisma.itineraryDay.create({
           data: {
             itineraryId,
@@ -575,87 +606,122 @@ router.post("/save", async (req: Request, res: Response) => {
           },
         });
 
-        // 創建這一天的所有 nodes
-        for (let i = 0; i < newDay.Nodes.length; i++) {
+        // 創建景點 nodes
+        for (let i = 0; i < (newDay.Nodes || []).length; i++) {
           const node = newDay.Nodes[i];
-
-          // ✅ 統一處理：支援 Place.id 和 Attraction.id 兩種格式
-          const attractionId = node?.Place?.id || node?.Attraction?.id;
-
-          if (attractionId) {
-            console.log(
-              `✅ 創建新 node：attractionId=${attractionId}, order=${i}, durationMinutes=${
-                node.durationMinutes || 60
-              }`
-            );
-            await prisma.itineraryNode.create({
+          const dayId = createdDay.id;
+          if (
+            node.Place &&
+            node.Place.image &&
+            node.Place.image.includes("accommodations")
+          ) {
+            // 住宿節點
+            await prisma.stayNode.create({
               data: {
-                itineraryDayId: createdDay.id,
-                attractionId: attractionId,
-                durationMinutes: node.durationMinutes || 60,
-                order: i,
+                itineraryDayId: dayId,
+                accommodationId: node.Place.id,
                 status: 1,
               },
             });
           } else {
-            console.warn(
-              "⚠️ node 缺少有效的 attractionId，跳過該 node:",
-              JSON.stringify(node, null, 2)
-            );
+            // 景點節點
+            const attractionId = node?.Place?.id || node?.Attraction?.id;
+            if (attractionId) {
+              await prisma.itineraryNode.create({
+                data: {
+                  itineraryDayId: dayId,
+                  attractionId,
+                  durationMinutes: node.durationMinutes || 60,
+                  order: i,
+                  status: 1,
+                },
+              });
+            }
+          }
+        }
+
+        // 創建住宿 nodes
+        for (let i = 0; i < (newDay.StayNodes || []).length; i++) {
+          const stayNode = newDay.StayNodes[i];
+          const accommodationId = stayNode?.accommodationId;
+          if (accommodationId) {
+            await prisma.stayNode.create({
+              data: {
+                itineraryDayId: createdDay.id,
+                accommodationId,
+                status: 1,
+              },
+            });
           }
         }
       } else {
-        // 現有的 Day - 更新 nodes
-        console.log("🔄 更新現有的 Day:", newDay.dayDate, "dayId:", oldDay.id);
-
-        // 先將這天的所有舊 nodes 標記為 status=0
+        // 更新現有 Day 的 nodes
         await prisma.itineraryNode.updateMany({
           where: { itineraryDayId: oldDay.id },
           data: { status: 0 },
         });
+        await prisma.stayNode.updateMany({
+          where: { itineraryDayId: oldDay.id },
+          data: { status: 0 },
+        });
 
-        // 重新創建這天的 nodes（基於新資料）
-        for (let i = 0; i < newDay.Nodes.length; i++) {
+        // 重新創建景點 nodes
+        for (let i = 0; i < (newDay.Nodes || []).length; i++) {
           const node = newDay.Nodes[i];
-
-          // ✅ 統一處理：支援 Place.id 和 Attraction.id 兩種格式
-          const attractionId = node?.Place?.id || node?.Attraction?.id;
-
-          if (attractionId) {
-            console.log(
-              `✅ 更新 node：attractionId=${attractionId}, order=${i}, durationMinutes=${
-                node.durationMinutes || 60
-              }`
-            );
-            await prisma.itineraryNode.create({
+          const dayId = oldDay.id;
+          if (
+            node.Place &&
+            node.Place.image &&
+            node.Place.image.includes("accommodations")
+          ) {
+            // 住宿節點
+            await prisma.stayNode.create({
               data: {
-                itineraryDayId: oldDay.id,
-                attractionId: attractionId,
-                durationMinutes: node.durationMinutes || 60,
-                order: i,
+                itineraryDayId: dayId,
+                accommodationId: node.Place.id,
                 status: 1,
               },
             });
           } else {
-            console.warn(
-              "⚠️ node 缺少有效的 attractionId，跳過該 node:",
-              JSON.stringify(node, null, 2)
-            );
+            // 景點節點
+            const attractionId = node?.Place?.id || node?.Attraction?.id;
+            if (attractionId) {
+              await prisma.itineraryNode.create({
+                data: {
+                  itineraryDayId: dayId,
+                  attractionId,
+                  durationMinutes: node.durationMinutes || 60,
+                  order: i,
+                  status: 1,
+                },
+              });
+            }
+          }
+        }
+
+        // 重新創建住宿 nodes
+        for (let i = 0; i < (newDay.StayNodes || []).length; i++) {
+          const stayNode = newDay.StayNodes[i];
+          const accommodationId = stayNode?.accommodationId;
+          if (accommodationId) {
+            await prisma.stayNode.create({
+              data: {
+                itineraryDayId: oldDay.id,
+                accommodationId,
+                status: 1,
+              },
+            });
           }
         }
       }
     }
 
-    //=======================================================
-    // ✅ 3. 清理不存在的 Days
-    //=======================================================
-    const newDayIds = newItinerary.map((d: any) => d.id).filter(Boolean);
+    // 3. 清理不存在的 Days
+    const newDayIds = newItinerary.map((d) => d.id).filter(Boolean);
     const oldDayIds = oldItinerary.Days.map((d) => d.id);
     const deletedDayIds = oldDayIds.filter((id) => !newDayIds.includes(id));
 
-    // 將已刪除的 days 和其 nodes 標記為 status=0
     for (const dayId of deletedDayIds) {
-      console.log("🗑️ 刪除 Day:", dayId);
       await prisma.itineraryDay.update({
         where: { id: dayId },
         data: { status: 0 },
@@ -664,12 +730,12 @@ router.post("/save", async (req: Request, res: Response) => {
         where: { itineraryDayId: dayId },
         data: { status: 0 },
       });
+      await prisma.stayNode.updateMany({
+        where: { itineraryDayId: dayId },
+        data: { status: 0 },
+      });
     }
 
-    //=======================================================
-    // ✅ DONE
-    //=======================================================
-    console.log("✅ 聰明更新完成");
     return res.json({ success: true, message: "行程保存成功" });
   } catch (err) {
     console.error("❌ /save 發生錯誤:", err);
@@ -679,6 +745,166 @@ router.post("/save", async (req: Request, res: Response) => {
     });
   }
 });
+// router.post("/save", async (req: Request, res: Response) => {
+//   try {
+//     const { itineraryData: newItinerary } = req.body;
+
+//     console.log("=== /save API 收到的資料 ===");
+//     console.log("newItinerary:", JSON.stringify(newItinerary, null, 2));
+
+//     //=======================================================
+//     // ✅ 0. 檢查參數
+//     //=======================================================
+//     const itineraryId = newItinerary?.[0]?.itineraryId;
+//     if (!itineraryId) {
+//       return res.status(400).json({ error: "缺少 itineraryId" });
+//     }
+
+//     //=======================================================
+//     // ✅ 1. 抓現有行程（只抓 status=1 的）
+//     //=======================================================
+//     const oldItinerary = await prisma.itinerary.findFirst({
+//       where: { id: itineraryId, status: 1 },
+//       include: {
+//         Days: {
+//           where: { status: 1 },
+//           include: {
+//             Nodes: {
+//               where: { status: 1 },
+//             },
+//           },
+//           orderBy: { dayDate: "asc" },
+//         },
+//       },
+//     });
+
+//     if (!oldItinerary) {
+//       return res.status(404).json({ error: "舊行程不存在" });
+//     }
+
+//     //=======================================================
+//     // ✅ 2. 聰明更新：只更新有變化的部分
+//     //=======================================================
+//     for (const newDay of newItinerary) {
+//       // 找到對應的舊 Day
+//       const oldDay = oldItinerary.Days.find((d) => d.id === newDay.id);
+
+//       if (!oldDay) {
+//         // 新增的 Day - 創建新的
+//         console.log("🆕 創建新的 Day:", newDay.dayDate);
+//         const createdDay = await prisma.itineraryDay.create({
+//           data: {
+//             itineraryId,
+//             dayDate: new Date(newDay.dayDate),
+//             startTime: new Date(newDay.startTime),
+//             status: 1,
+//           },
+//         });
+
+//         // 創建這一天的所有 nodes
+//         for (let i = 0; i < newDay.Nodes.length; i++) {
+//           const node = newDay.Nodes[i];
+
+//           // ✅ 統一處理：支援 Place.id 和 Attraction.id 兩種格式
+//           const attractionId = node?.Place?.id || node?.Attraction?.id;
+
+//           if (attractionId) {
+//             console.log(
+//               `✅ 創建新 node：attractionId=${attractionId}, order=${i}, durationMinutes=${
+//                 node.durationMinutes || 60
+//               }`
+//             );
+//             await prisma.itineraryNode.create({
+//               data: {
+//                 itineraryDayId: createdDay.id,
+//                 attractionId: attractionId,
+//                 durationMinutes: node.durationMinutes || 60,
+//                 order: i,
+//                 status: 1,
+//               },
+//             });
+//           } else {
+//             console.warn(
+//               "⚠️ node 缺少有效的 attractionId，跳過該 node:",
+//               JSON.stringify(node, null, 2)
+//             );
+//           }
+//         }
+//       } else {
+//         // 現有的 Day - 更新 nodes
+//         console.log("🔄 更新現有的 Day:", newDay.dayDate, "dayId:", oldDay.id);
+
+//         // 先將這天的所有舊 nodes 標記為 status=0
+//         await prisma.itineraryNode.updateMany({
+//           where: { itineraryDayId: oldDay.id },
+//           data: { status: 0 },
+//         });
+
+//         // 重新創建這天的 nodes（基於新資料）
+//         for (let i = 0; i < newDay.Nodes.length; i++) {
+//           const node = newDay.Nodes[i];
+
+//           // ✅ 統一處理：支援 Place.id 和 Attraction.id 兩種格式
+//           const attractionId = node?.Place?.id || node?.Attraction?.id;
+
+//           if (attractionId) {
+//             console.log(
+//               `✅ 更新 node：attractionId=${attractionId}, order=${i}, durationMinutes=${
+//                 node.durationMinutes || 60
+//               }`
+//             );
+//             await prisma.itineraryNode.create({
+//               data: {
+//                 itineraryDayId: oldDay.id,
+//                 attractionId: attractionId,
+//                 durationMinutes: node.durationMinutes || 60,
+//                 order: i,
+//                 status: 1,
+//               },
+//             });
+//           } else {
+//             console.warn(
+//               "⚠️ node 缺少有效的 attractionId，跳過該 node:",
+//               JSON.stringify(node, null, 2)
+//             );
+//           }
+//         }
+//       }
+//     }
+
+//     //=======================================================
+//     // ✅ 3. 清理不存在的 Days
+//     //=======================================================
+//     const newDayIds = newItinerary.map((d: any) => d.id).filter(Boolean);
+//     const oldDayIds = oldItinerary.Days.map((d) => d.id);
+//     const deletedDayIds = oldDayIds.filter((id) => !newDayIds.includes(id));
+
+//     // 將已刪除的 days 和其 nodes 標記為 status=0
+//     for (const dayId of deletedDayIds) {
+//       console.log("🗑️ 刪除 Day:", dayId);
+//       await prisma.itineraryDay.update({
+//         where: { id: dayId },
+//         data: { status: 0 },
+//       });
+//       await prisma.itineraryNode.updateMany({
+//         where: { itineraryDayId: dayId },
+//         data: { status: 0 },
+//       });
+//     }
+
+//     //=======================================================
+//     // ✅ DONE
+//     //=======================================================
+//     console.log("✅ 聰明更新完成");
+//     return res.json({ success: true, message: "行程保存成功" });
+//   } catch (err) {
+//     console.error("❌ /save 發生錯誤:", err);
+//     return res.status(500).json({
+//       error: "伺服器錯誤",
+//       details: err instanceof Error ? err.message : String(err),
+//     });
+//   }
+// });
 // router.post("/save", async (req: Request, res: Response) => {
 //   try {
 //     const { itineraryData: newItinerary } = req.body;
