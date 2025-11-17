@@ -11,7 +11,6 @@ import session from "express-session";
 import sessionFileStore from "session-file-store";
 import cors from "cors";
 import path from "path";
-import { fileURLToPath } from "url";
 
 import loginRouter from "./routes/api-user";
 import friendsRouter from "./routes/friend";
