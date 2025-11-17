@@ -42,19 +42,29 @@ type PlaceUpsert = {
   };
 };
 
-// 時間處裡
-function hhmmToDate(hhmm?: string): Date {
-  if (typeof hhmm !== "string") {
-    throw new Error("HH:mm 是必填字串");
+// 時間處理：接受 "HH:mm" 或 ISO 字串（例如 "1970-01-01T02:32:00.000Z"）
+function toDateFromTimeString(t?: string): Date {
+  if (typeof t !== "string") {
+    throw new Error("時間必須是字串");
   }
-  const m = /^(\d{2}):(\d{2})$/.exec(hhmm);
-  if (!m) throw new Error(`時間格式錯誤：${hhmm}（期待 HH:mm）`);
-  const H = Number(m[1]);
-  const M = Number(m[2]);
-  return new Date(Date.UTC(1970, 0, 1, H, M, 0, 0));
+
+  // 1) 若是 HH:mm 格式 → 用正規表達式判斷
+  const m = /^(\d{2}):(\d{2})$/.exec(t);
+  if (m) {
+    const H = Number(m[1]);
+    const M = Number(m[2]);
+    return new Date(Date.UTC(1970, 0, 1, H, M, 0, 0));
+  }
+
+  // 2) 否則嘗試當 ISO 字串解析（給前端 timeToUtcIso 用）
+  const d = new Date(t);
+  if (!Number.isFinite(d.getTime())) {
+    throw new Error(`時間格式錯誤：${t}（期待 HH:mm 或 ISO）`);
+  }
+  return d;
 }
 
-const CLOSED_PLACEHOLDER_DT = hhmmToDate("00:00");
+const CLOSED_PLACEHOLDER_DT = toDateFromTimeString("00:00");
 
 // 接受 openTime/closeTime 或 open/close；公休塞占位時間（因 DateTime 非 nullable）
 function toOHRecordForCreate(h: any) {
@@ -88,8 +98,8 @@ function toOHRecordForCreate(h: any) {
   return {
     weekday,
     isClosed: false,
-    openTime: hhmmToDate(open),
-    closeTime: hhmmToDate(close),
+    openTime: toDateFromTimeString(open),
+    closeTime: toDateFromTimeString(close),
   };
 }
 
@@ -176,7 +186,7 @@ export async function getPlaceExpanded(
   // 撈出Opening Hours
   const openingHour = await prisma.openingHour.findMany({
     where: { placeId: place.id },
-    select: { weekday: true, openTime: true, closeTime: true },
+    select: { weekday: true, openTime: true, closeTime: true, isClosed: true },
   });
 
   return {
