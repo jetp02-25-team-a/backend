@@ -387,6 +387,23 @@ router.get("/itinerary-list", async (req: Request, res: Response) => {
                     order: "asc",
                   },
                 },
+                StayNodes: {
+                  where: { status: 1 },
+                  select: {
+                    id: true,
+                    accommodationId: true,
+                    Accommodation: {
+                      select: {
+                        id: true,
+                        name: true,
+                        address: true,
+                        description: true,
+                        latitude: true,
+                        longitude: true,
+                      },
+                    },
+                  },
+                },
               },
               orderBy: {
                 dayDate: "asc",
