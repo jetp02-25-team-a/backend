@@ -530,6 +530,7 @@ router.get("/similar-experience", async (req: Request, res: Response) => {
         nickname: true,
         fullName: true,
         avatar: true,
+        description: true,
         Itineraries: {
           where: { status: 1 },
           select: {
@@ -569,9 +570,13 @@ router.get("/similar-experience", async (req: Request, res: Response) => {
           image: string | null;
         }[] = [];
 
+        // 計算所有行程的景點 id（去重）
+        const allAttractionIds = new Set<number>();
+
         u.Itineraries.forEach((iti) => {
           iti.Days.forEach((d) => {
             d.Nodes.forEach((n) => {
+              if (n.attractionId) allAttractionIds.add(n.attractionId);
               if (
                 n.attractionId &&
                 experiencedAttractionIds.includes(n.attractionId)
@@ -600,6 +605,8 @@ router.get("/similar-experience", async (req: Request, res: Response) => {
             nickname: u.nickname,
             fullName: u.fullName,
             avatar: u.avatar,
+            description: u.description,
+            totalAttractionCount: allAttractionIds.size,
           },
           overlapCount: uniqueOverlap.size,
           // 完整的重疊景點列表
