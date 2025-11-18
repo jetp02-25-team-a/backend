@@ -319,6 +319,97 @@ const safeParseInt = (value: string | number | undefined | null): number | undef
 };
 
 /* ==========================================================
+ * GET /ranking － Ranking Artikel
+ * ========================================================== */
+router.get("/ranking", async (req: Request, res: Response) => {
+    try {
+        // Query params (opsional)
+        const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 20));
+        const page = Math.max(1, parseInt(req.query.page as string) || 1);
+
+        // Bobot skor (bisa diubah)
+        const WEIGHT_LIKE = 3;
+        const WEIGHT_COMMENT = 2;
+        const WEIGHT_PHOTO = 1;
+        const WEIGHT_FRESHNESS = 5;
+        const DECAY_HOURS = 24 * 7; // freshness nilai 1 → 0 selama 7 hari
+
+        // Ambil posts + count data
+        const posts = await prisma.post.findMany({
+            orderBy: { createdAt: "desc" },
+            include: {
+                Location: { select: { city: true } },
+                Photos: true,
+                _count: {
+                    select: {
+                        Likes: true,
+                        MessageBoard: true,
+                        Photos: true,
+                    },
+                },
+            },
+        });
+
+        const now = new Date();
+
+        // Hitung score ranking
+        const scored = posts.map((p) => {
+            const likes = p._count.Likes || 0;
+            const comments = p._count.MessageBoard || 0;
+            const photos = p._count.Photos || 0;
+
+            const hoursSinceCreated =
+                (now.getTime() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60);
+
+            // freshness = 1 → 0 (linearly) dalam DECAY_HOURS
+            const freshness = Math.max(0, 1 - hoursSinceCreated / DECAY_HOURS);
+
+            const score =
+                likes * WEIGHT_LIKE +
+                comments * WEIGHT_COMMENT +
+                photos * WEIGHT_PHOTO +
+                freshness * WEIGHT_FRESHNESS;
+
+            return {
+                id: p.id.toString(),
+                title: p.title,
+                createdAt: p.createdAt,
+                location: p.Location?.city || "未知地點",
+                imgUrl: p.Photos?.[0]?.url || "",
+                likesCount: likes,
+                commentsCount: comments,
+                photosCount: photos,
+                score,
+            };
+        });
+
+        // Sort by highest score
+        scored.sort((a, b) => b.score - a.score);
+
+        // Pagination
+        const start = (page - 1) * limit;
+        const data = scored.slice(start, start + limit).map((item, idx) => ({
+            ...item,
+            rank: start + idx + 1,
+        }));
+
+        return res.json({
+            success: true,
+            message: "Post ranking successfully calculated",
+            page,
+            limit,
+            total: scored.length,
+            data,
+        });
+    } catch (error) {
+        console.error("❌ Error ranking posts:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to calculate article ranking",
+        });
+    }
+});
+/* ==========================================================
  * POST / - Buat artikel baru
  * ========================================================== */
 router.post("/", jwtParseMiddleware, requireAuth,photoUpload, async (req: Request, res: Response) => {
@@ -572,6 +663,107 @@ router.get("/", async (_req: Request, res: Response) => {
         res.status(500).json({ success: false, message: "Failed to retrieve posts" });
     }
 });
+// /* ==========================================================
+//  * GET /ranking － Ranking Artikel
+//  * ========================================================== */
+// router.get("/ranking", async (req: Request, res: Response) => {
+//     try {
+//         // Query params (opsional)
+//         const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 20));
+//         const page = Math.max(1, parseInt(req.query.page as string) || 1);
+
+//         // Bobot skor (bisa diubah)
+//         const WEIGHT_LIKE = 3;
+//         const WEIGHT_COMMENT = 2;
+//         const WEIGHT_PHOTO = 1;
+//         const WEIGHT_FRESHNESS = 5;
+//         const DECAY_HOURS = 24 * 7; // freshness nilai 1 → 0 selama 7 hari
+
+//         // Ambil posts + count data
+//         const posts = await prisma.post.findMany({
+//             orderBy: { createdAt: "desc" },
+//             include: {
+//                 Location: { select: { city: true } },
+//                 Photos: true,
+//                 _count: {
+//                     select: {
+//                         Likes: true,
+//                         MessageBoard: true,
+//                         Photos: true,
+//                     },
+//                 },
+//             },
+//         });
+
+//         const now = new Date();
+
+//         // Hitung score ranking
+//         const scored = posts.map((p) => {
+//             const likes = p._count.Likes || 0;
+//             const comments = p._count.MessageBoard || 0;
+//             const photos = p._count.Photos || 0;
+
+//             const hoursSinceCreated =
+//                 (now.getTime() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60);
+
+//             // freshness = 1 → 0 (linearly) dalam DECAY_HOURS
+//             const freshness = Math.max(0, 1 - hoursSinceCreated / DECAY_HOURS);
+
+//             const score =
+//                 likes * WEIGHT_LIKE +
+//                 comments * WEIGHT_COMMENT +
+//                 photos * WEIGHT_PHOTO +
+//                 freshness * WEIGHT_FRESHNESS;
+
+//             return {
+//                 id: p.id.toString(),
+//                 title: p.title,
+//                 createdAt: p.createdAt,
+//                 location: p.Location?.city || "未知地點",
+//                 imgUrl: p.Photos?.[0]?.url || "",
+//                 likesCount: likes,
+//                 commentsCount: comments,
+//                 photosCount: photos,
+//                 score,
+//             };
+//         });
+
+//         // Sort by highest score
+//         scored.sort((a, b) => b.score - a.score);
+
+//         // Pagination
+//         const start = (page - 1) * limit;
+//         const data = scored.slice(start, start + limit).map((item, idx) => ({
+//             ...item,
+//             rank: start + idx + 1,
+//         }));
+
+//         return res.json({
+//             success: true,
+//             message: "Post ranking successfully calculated",
+//             page,
+//             limit,
+//             total: scored.length,
+//             data,
+//         });
+//     } catch (error) {
+//         console.error("❌ Error ranking posts:", error);
+//         return res.status(500).json({
+//             success: false,
+//             message: "Failed to calculate article ranking",
+//         });
+//     }
+// });
+
+
+
+
+
+
+
+
+
+
 
 
 export default router;
