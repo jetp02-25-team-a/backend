@@ -18,5 +18,45 @@
     "point": 1000,
     "safety": 0,
     "avatar": "avatar.0000.jpg"
+  },
+  {
+    "email": "Auser@test.com",
+    "password": "password123",
+    "fullName": "王小美",
+    "nickname": "美美",
+    "description": "嗨～我是美美！喜歡美食、旅行和可愛的小事物，期待在這裡結交更多同好💕",
+    "point": 1000,
+    "safety": 0,
+    "avatar": "avatar.0000.jpg"
+  },
+  {
+    "email": "Buser@test.com",
+    "password": "password123",
+    "fullName": "王大同",
+    "nickname": "台北王陽明",
+    "description": "熱愛生活、喜歡探索新鮮事物的一般用戶，享受分享與交流，希望與大家一起發現更多美好。",
+    "point": 1000,
+    "safety": 0,
+    "avatar": "avatar.0000.jpg"
+  },
+  {
+    "email": "Ｃuser@test.com",
+    "password": "password123",
+    "fullName": "王傑",
+    "nickname": "桀傲不馴的王者",
+    "description": "活躍於生活大小事的美美，愛拍照、愛分享，任何有趣的事都不想錯過！",
+    "point": 1000,
+    "safety": 0,
+    "avatar": "avatar.0000.jpg"
+  },
+  {
+    "email": "Ｄuser@test.com",
+    "password": "password123",
+    "fullName": "魯夫",
+    "nickname": "蒙其·D·魯夫 ",
+    "description": "以輕鬆的方式記錄日常、分享體驗，是你可靠的內容夥伴。",
+    "point": 1000,
+    "safety": 0,
+    "avatar": "avatar.0000.jpg"
   }
 ]
