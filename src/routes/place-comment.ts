@@ -4,16 +4,17 @@ import { z } from "zod";
 import {
   createComment,
   updateComment,
-  deleteComment,
   getUserCommentForPlace,
   deleteReview,
 } from "../services/comment";
+import { requireAuth } from "../middleware/jwt";
 
 // ★ 這行很關鍵：讓子路由吃得到父層的 :id
 const router = Router({ mergeParams: true });
 
 /** POST /places/:id/comments  新增留言 */
-router.post("/:placeId/comments", async (req, res) => {
+router.post("/:placeId/comments", requireAuth, async (req, res) => {
+  const userId = req.user!.user_id;
   const placeId = Number(req.params.placeId);
   if (!Number.isInteger(placeId)) {
     return res
@@ -38,7 +39,7 @@ router.post("/:placeId/comments", async (req, res) => {
     return res.status(400).json({ success: false, error: errors });
   }
 
-  const { userId, content } = parsed.data;
+  const { content } = parsed.data;
 
   // 可選：若你不想允許重複，先查有沒有舊的
   const existing = await getUserCommentForPlace(placeId, userId);
@@ -60,7 +61,8 @@ router.post("/:placeId/comments", async (req, res) => {
 });
 
 /** PATCH /places/:id/comments/:commentId  更新留言 */
-router.patch("/:placeId/comments/:commentId", async (req, res) => {
+router.patch("/:placeId/comments/:commentId", requireAuth, async (req, res) => {
+  const userId = req.user!.user_id;
   const placeId = Number(req.params.placeId);
   const commentId = Number(req.params.commentId);
   if (!Number.isInteger(placeId) || !Number.isInteger(commentId)) {
@@ -72,9 +74,6 @@ router.patch("/:placeId/comments/:commentId", async (req, res) => {
   const Body = z.object({
     content: z.string().min(1).optional(),
   });
-  // .refine((d) => d.content !== undefined, {
-  //   message: "Nothing to update",
-  // });
 
   const parsed = Body.safeParse(req.body);
   if (!parsed.success) {
@@ -85,34 +84,36 @@ router.patch("/:placeId/comments/:commentId", async (req, res) => {
     return res.status(400).json({ success: false, error: errors });
   }
 
-  const updated = await updateComment(placeId, commentId, parsed.data);
+  const updated = await updateComment(placeId, commentId, parsed.data, userId);
   if (!updated) {
     return res
       .status(404)
-      .json({ success: false, error: { message: "Comment not found" } });
+      .json({ success: false, error: { message: "你沒有權限編輯這則留言" } });
   }
 
   res.json({ success: true, data: updated });
 });
 
 /** DELETE /places/:id/comments/:commentId  刪除留言和評分 */
-router.delete("/:placeId/comments/:commentId", async (req, res) => {
-  const placeId = Number(req.params.placeId);
-  const commentId = Number(req.params.commentId);
+router.delete(
+  "/:placeId/comments/:commentId",
+  requireAuth,
+  async (req, res) => {
+    const userId = req.user!.user_id;
+    const placeId = Number(req.params.placeId);
+    const commentId = Number(req.params.commentId);
 
-  const rawUserId = req.headers["x-user-id"];
-  const userId = Number(rawUserId);
+    if (!Number.isFinite(userId) || userId <= 0) {
+      return res.status(401).json({
+        success: false,
+        error: "Missing or invalid x-user-id header",
+      });
+    }
 
-  if (!Number.isFinite(userId) || userId <= 0) {
-    return res.status(401).json({
-      success: false,
-      error: "Missing or invalid x-user-id header",
-    });
+    await deleteReview(userId, placeId, commentId);
+
+    res.json({ success: true, data: { id: commentId } });
   }
-
-  await deleteReview(userId, placeId, commentId);
-
-  res.json({ success: true, data: { id: commentId } });
-});
+);
 
 export default router;

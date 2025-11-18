@@ -11,7 +11,6 @@ import session from "express-session";
 import sessionFileStore from "session-file-store";
 import cors from "cors";
 import path from "path";
-import { fileURLToPath } from "url";
 
 import loginRouter from "./routes/api-user";
 import friendsRouter from "./routes/friend";
@@ -20,6 +19,7 @@ import placeRouter from "./routes/place";
 import featuredRouter from "./routes/place-features";
 import searchRouter from "./routes/place-search";
 import favoriteRouter from "./routes/place-favorite";
+import randomImagesRouter from "./routes/place-random-images";
 import mapRouter from "./routes/place-leaflet";
 import articleRouter from "./routes/article.routes";
 import likeroutes from "./routes/likeroutes";
@@ -31,7 +31,7 @@ import { m3AccommodationsRoute, m3Booking, m3Favorite } from "./routes/m3";
 import http from "http";
 import { Server } from "socket.io";
 import { chatSocket } from "./socket/socket";
-// import { jwtParseMiddleware } from "./middleware";
+import { jwtParseMiddleware } from "./middleware";
 
 import { m3JwtParseMiddleware } from "./middleware";
 import { globalErrorHandler } from "./middleware";
@@ -39,14 +39,7 @@ import { globalErrorHandler } from "./middleware";
 // 建立伺服器主物件
 const app = express();
 
-// 圖片上傳靜態位置
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-app.use(
-  "/uploads",
-  express.static(path.join(__dirname, "..", "public", "uploads"))
-);
+app.use("/images", express.static(path.join(process.cwd(), "public/images")));
 
 // CORS 白名單設定
 const allowedOrigins = [
@@ -79,6 +72,9 @@ app.use(express.static("public"));
 
 // JWT 解析 middleware (可選性驗證) (m3用)
 app.use(m3JwtParseMiddleware);
+
+app.use("/api/place", jwtParseMiddleware);
+app.use("/api/favorite", jwtParseMiddleware);
 
 // 解析 JSON body 的中間件
 app.use(express.json());
@@ -134,6 +130,7 @@ app.use("/api/place/featured", featuredRouter);
 app.use("/api/place/search", searchRouter);
 app.use("/api/place", placeRouter);
 app.use("/api/favorite", favoriteRouter);
+app.use("/api/random-images", randomImagesRouter);
 app.use("/api/article", articleRouter);
 app.use("/api/itineraries", itinerariesRouter);
 app.use("/api", mallRouter);

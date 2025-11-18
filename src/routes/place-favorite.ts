@@ -1,5 +1,6 @@
 import prisma from "../utils/prisma-pagination-place";
 import { Router } from "express";
+import { requireAuth } from "../middleware/jwt";
 
 const router = Router();
 
@@ -41,6 +42,7 @@ router.get("/", async (req, res) => {
         photo: f.Place.Photos[0]?.url ?? "/placeholder.jpg",
         avgScore, // number | null
         favoritedAt: f.createdAt,
+        introduce: f.Place.introduce,
       };
     });
 
@@ -77,9 +79,9 @@ router.get("/check", async (req, res) => {
 });
 
 // 新增收藏
-router.post("/", async (req, res) => {
+router.post("/", requireAuth, async (req, res) => {
   try {
-    const userId = Number(req.body?.userId);
+    const userId = req.user!.user_id;
     const placeId = Number(req.body?.placeId);
     if (!userId || !placeId) {
       return res
@@ -111,9 +113,9 @@ router.post("/", async (req, res) => {
 });
 
 // 取消收藏
-router.delete("/:placeId", async (req, res) => {
+router.delete("/:placeId", requireAuth, async (req, res) => {
   try {
-    const userId = Number(req.body?.userId);
+    const userId = req.user!.user_id;
     const placeId = Number(req.body?.placeId);
     if (!userId || !placeId) {
       return res

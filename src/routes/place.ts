@@ -4,6 +4,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { requireAuth } from "../middleware/jwt";
 
 import {
   getPlaceExpanded,
@@ -49,9 +50,9 @@ const upload = multer({ storage });
 
 // 針對營業時間做限制
 const DayOpen = z.object({
-  weekday: z.number().int().min(0).max(6),
-  openTime: z.string().regex(/^\d{2}:\d{2}$/, "HH:mm"),
-  closeTime: z.string().regex(/^\d{2}:\d{2}$/, "HH:mm"),
+  weekday: z.coerce.number().int().min(0).max(6),
+  openTime: z.string(),
+  closeTime: z.string(),
   isClosed: z.literal(false).optional(), // 可不填或明確 false
 });
 const DayClosed = z.object({
@@ -182,7 +183,8 @@ router.get("/:id", async (req, res) => {
  *    - 回傳新 place.id
  */
 
-router.post("/", upload.array("photos", 20), async (req, res) => {
+router.post("/", requireAuth, upload.array("photos", 20), async (req, res) => {
+  const userId = req.user!.user_id;
   try {
     const body = req.body;
     const files = (req.files as Express.Multer.File[]) || [];

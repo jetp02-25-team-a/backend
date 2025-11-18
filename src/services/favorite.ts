@@ -55,7 +55,7 @@ export const getUserFavorites = async (req, res) => {
           },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
     });
 
     const formatted = favorites.map((f) => ({
@@ -71,6 +71,8 @@ export const getUserFavorites = async (req, res) => {
               f.Place.Ranks.length
             ).toFixed(1)
           : "—",
+      favoritedAt: f.createdAt,
+      introduce: f.Place.introduce,
     }));
 
     res.json({ success: true, data: formatted });
