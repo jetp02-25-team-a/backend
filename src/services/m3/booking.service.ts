@@ -11,7 +11,7 @@ export const getInventoriesByAccommodation = async (
 ) => {
   const roomTypes = await prisma.roomType.findMany({
     where: { accommodationId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, basePrice: true },
   });
 
   const results = await Promise.all(
@@ -27,6 +27,7 @@ export const getInventoriesByAccommodation = async (
       return {
         roomTypeId: roomType.id,
         name: roomType.name,
+        basePrice: roomType.basePrice,
         availability: inventories.map((inv) => ({
           date: inv.date,
           availableCount: inv.availableCount,
