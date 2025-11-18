@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import { prisma } from "../utils/prisma-pagination";
-import { ms } from "zod/v4/locales";
+// import { ms } from "zod/v4/locales";
 
 // ---------- Socket.IO 設定 ----------
 //宣告函式 匯入server 運行裡面的設定
@@ -20,6 +20,17 @@ export const chatSocket = (io: Server) => {
 
       // 你可以在這裡保存、綁定、加入房間、驗證等等
       socket.data.userId = userId; // 建議存起來方便之後用
+      // socket.join(userId);//56號加入
+      socket.join(String(userId));
+    });
+    //設定自己的房間
+    // socket.on("setMyId", (userId) => {
+    //   socket.data.userId = userId; // 建議存起來方便之後用
+    //   socket.join(String(userId));
+    // });
+    socket.on("setMyId", (userId) => {
+      socket.data.userId = userId;
+      socket.join(String(userId)); // 自己加入自己的 ID 房間
     });
 
     // 傳遞 session 資料範例
@@ -216,15 +227,17 @@ export const chatSocket = (io: Server) => {
     });
 
     //設定房間id（保持原本的邏輯，但改名避免混淆）
-    socket.on("joinRoomId", (roomId) => {
-      console.log("接收到的 joinRoomId:", roomId);
-      socket.data.friendId = roomId; // 建議存起來方便之後用
-    });
+    // socket.on("joinRoomId", (roomId) => {
+    //   console.log("接收到的 joinRoomId:", roomId);
+    //   socket.data.friendId = roomId; // 建議存起來方便之後用
+    // });
 
-    // 接收訊息（整合後的版本）
+    // 接收訊息（整合後的版本）11_18
     socket.on("chat", async (msg, callback) => {
+      // console.log("收到訊息:", msg);
       let savedMessage;
       try {
+        //發送給團體聊天室
         if (msg.roomId) {
           const message = await prisma.message.create({
             data: {
@@ -241,6 +254,7 @@ export const chatSocket = (io: Server) => {
             .to(chatRoomName)
             .emit("message:refetch", { roomId: msg.roomId });
         } else {
+          //發送給個人聊天室
           const message = await prisma.message.create({
             data: {
               senderId: msg.providerId,
@@ -250,10 +264,25 @@ export const chatSocket = (io: Server) => {
             },
           });
           savedMessage = message;
-          socket.to(msg.acceptId).emit("newMessage", savedMessage);
+          console.log("收到！！！個人訊息已儲存:", message);
+          // 發送給特定用戶（這裡需要根據您的用戶-socket對應邏輯調整）
+          // socket.to(msg.acceptId).emit("newMessage", savedMessage);
+          // 取得所有房間列表
+          const rooms = io.sockets.adapter.rooms;
+          console.log("目前所有房間：", rooms);
+          console.log("準備發縙給", msg.acceptId, "=>", savedMessage);
+          // socket.to(msg.acceptId).emit("newMessage", savedMessage); //發送給25號
+          // 發送給接收者
+          socket.to(String(msg.acceptId)).emit("newMessage", savedMessage);
+          // 也要回傳給自己 (避免只看到別人更新)
+          io.to(String(msg.providerId)).emit("newMessage", savedMessage);
+
           socket
             .to(msg.acceptId)
             .emit("message:refetch", { friendId: msg.acceptId });
+          // socket
+          //   .to(socket.id)
+          //   .emit("message:refetch", { friendId: msg.acceptId });
         }
         if (callback) callback({ success: true, message: "訊息已送出" });
       } catch (err) {
@@ -261,6 +290,8 @@ export const chatSocket = (io: Server) => {
         if (callback) callback({ success: false, message: "伺服器錯誤" });
       }
     });
+
+    //11-18end
     // socket.on("chat", async (msg, callback) => {
     //   let savedMessage;
 
