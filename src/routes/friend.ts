@@ -632,4 +632,61 @@ router.get("/similar-experience", async (req: Request, res: Response) => {
   }
 });
 
+//依照userid 取得該使用者的 發文 旅程 朋友 跟追蹤他的人
+// 依照 userId 取得該使用者的發文、旅程、朋友、追蹤他的人
+router.get("/user-activity", async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) {
+    return res.status(400).json({ success: false, message: "缺少 userId" });
+  }
+  try {
+    // 取得使用者基本資料
+    // const user = await prisma.user.findUnique({
+    //   where: { id: +userId },
+    //   select: {
+    //     id: true,
+    //     nickname: true,
+    //     avatar: true,
+    //     fullName: true,
+    //     description: true,
+    //   },
+    // });
+
+    // 取得發文
+    const posts = await prisma.post.count({
+      where: { userId: +userId },
+    });
+
+    // 取得旅程
+    const itineraries = await prisma.itinerary.count({
+      where: { userId: +userId, status: 1 },
+    });
+
+    // 取得朋友 (已接受的好友)
+    const friends = await prisma.friendship.count({
+      where: { userId: +userId, status: 1 },
+    });
+    // const friendList = friends.map((f) => f.Friend);
+
+    // 取得追蹤他的人 (friendId = userId 且 status = 1)
+    const followers = await prisma.friendship.count({
+      where: { friendId: +userId, status: 1 },
+    });
+    // const followerList = followers.map((f) => f.User);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        posts,
+        itineraries,
+        friends: friends,
+        followers: followers,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: "伺服器錯誤" });
+  }
+});
+
 export default router;
