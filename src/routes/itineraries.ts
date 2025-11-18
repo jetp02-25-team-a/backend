@@ -1616,6 +1616,14 @@ router.get("/user-itineraries", async (req: Request, res: Response) => {
     const result = await prisma.userItinerary.findMany({
       where: {
         userId: Number(user_id),
+        Itinerary: {
+          status: 1,
+          Days: {
+            some: {
+              dayDate: { gte: new Date() },
+            },
+          },
+        },
       },
       include: {
         Itinerary: {
@@ -1884,6 +1892,39 @@ router.get("/stay-nearby/:place", async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, message: "伺服器錯誤" });
   }
 });
+
+//刪除行程 軟刪除 根據id
+router.delete(
+  "/delete/:itineraryId",
+  jwtParseMiddleware,
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const { itineraryId } = req.params;
+
+    try {
+      await prisma.itinerary
+        .update({
+          where: {
+            id: Number(itineraryId),
+          },
+          data: {
+            status: 0,
+          },
+        })
+        .then(() => {
+          res.status(200).json({ success: true, message: "刪除成功" });
+        })
+        .catch((err) => {
+          console.log(err);
+          res.status(500).json({ success: false, message: "伺服器錯誤" });
+        });
+    } catch (err) {
+      console.log(err);
+      res.status(500).json({ success: false, message: "伺服器錯誤" });
+    }
+  }
+);
+
 // 🔧 Haversine 公式 - 計算兩個經緯度之間的距離 (公里)
 function calculateDistance(
   lat1: number,
