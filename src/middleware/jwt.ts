@@ -53,6 +53,15 @@ export const jwtParseMiddleware = (
   //   res.locals.user = null;
   //   res.locals.isAuthenticated = false;
   // }
+  if (!req.user) {
+    const rawUid = req.headers["x-user-id"];
+    const uid = Number(rawUid);
+
+    if (Number.isFinite(uid) && uid > 0) {
+      // 這裡只塞最基本的 id，就當成「已登入使用者」
+      req.user = { user_id: uid } as JwtPayload;
+    }
+  }
 
   next();
 };

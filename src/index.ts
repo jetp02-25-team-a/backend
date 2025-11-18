@@ -31,7 +31,7 @@ import { m3AccommodationsRoute, m3Booking, m3Favorite } from "./routes/m3";
 import http from "http";
 import { Server } from "socket.io";
 import { chatSocket } from "./socket/socket";
-// import { jwtParseMiddleware } from "./middleware";
+import { jwtParseMiddleware } from "./middleware";
 
 import { m3JwtParseMiddleware } from "./middleware";
 import { globalErrorHandler } from "./middleware";
@@ -72,6 +72,9 @@ app.use(express.static("public"));
 
 // JWT 解析 middleware (可選性驗證) (m3用)
 app.use(m3JwtParseMiddleware);
+
+app.use("/api/place", jwtParseMiddleware);
+app.use("/api/favorite", jwtParseMiddleware);
 
 // 解析 JSON body 的中間件
 app.use(express.json());
