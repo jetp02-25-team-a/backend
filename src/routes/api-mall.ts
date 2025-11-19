@@ -19,6 +19,26 @@ const merchant = new Merchant("Test", {
   ClientBackURL: "http://localhost:3000/shops",
 });
 
+//查詢關鍵字
+router.get("/allkeyword", async (req: Request, res: Response) => {
+  try {
+    const uniqueKeywords = await prisma.product.findMany({
+      select: {
+        keyword: true,
+      },
+      distinct: ["keyword"],
+    });
+    const keywordArray = uniqueKeywords.map((product) => product.keyword);
+    const response = {
+      success: true,
+      keyword: keywordArray,
+    };
+    res.json(response);
+  } catch (error) {
+    res.status(500).send("sever error");
+  }
+});
+
 //關鍵字搜尋
 router.get("/keyword", async (req: Request, res: Response) => {
   const keyword: string = req.query.keyword as string;
@@ -41,6 +61,38 @@ router.get("/keyword", async (req: Request, res: Response) => {
   };
 
   res.json(response);
+});
+
+//關鍵字搜尋分頁
+router.get("/product", async (req: Request, res: Response) => {
+  const keyword: string = req.query.keyword as string;
+  try {
+    const pageSize = 24;
+    const pageNum = parseInt(req.query.page as string) || 1;
+    const [product, meta] = await prisma.product
+      .paginate({
+        where: {
+          keyword: {
+            contains: keyword,
+          },
+        },
+        orderBy: { id: "asc" },
+        include: { ProductPics: true, ProductVariants: true },
+      })
+      .withPages({ limit: pageSize, page: pageNum });
+    const response = {
+      success: true,
+      product,
+      meta,
+    };
+    res.json(response);
+  } catch (e) {
+    const response = {
+      success: false,
+      message: "尋找失敗",
+    };
+    res.json(response);
+  }
 });
 
 //推薦商品路由
@@ -124,7 +176,7 @@ router.get(
         success: false,
         error: "找不到該產品",
       };
-      res.status(401).json(response);
+      return res.status(400).json(response);
     }
     const data = await prisma.product.findUnique({
       where: { id: id },
@@ -139,7 +191,7 @@ router.get(
         success: false,
         error: "找不到該產品",
       };
-      res.status(401).json(response);
+      return res.status(401).json(response);
     }
     const response: ApiResponse = {
       success: true,
@@ -183,6 +235,32 @@ router.get(
   }
 );
 
+//所有商品分頁
+router.get("/product", async (req: Request, res: Response) => {
+  try {
+    const pageSize = 24;
+    const pageNum = parseInt(req.query.page as string) || 1;
+    const [product, meta] = await prisma.product
+      .paginate({
+        orderBy: { id: "asc" },
+        include: { ProductPics: true, ProductVariants: true },
+      })
+      .withPages({ limit: pageSize, page: pageNum });
+    const response = {
+      success: true,
+      product,
+      meta,
+    };
+    res.json(response);
+  } catch (e) {
+    const response = {
+      success: false,
+      message: "尋找失敗",
+    };
+    res.json(response);
+  }
+});
+
 //處理物品字串
 function formatShoppingList(originalString: string): string {
   // 1. 將字串按分號和換行符 (;) 分割成項目數組
@@ -207,7 +285,7 @@ function formatShoppingList(originalString: string): string {
 
 //結帳
 router.post("/checkout", upload.none(), async (req: Request, res: Response) => {
-  const total = parseInt(req.body.total_price);
+  const total = parseInt(req.body.total_price) - parseInt(req.body.pointused);
   const item = formatShoppingList(req.body.product_list);
   const id = parseInt(req.body.userid);
   const MerchantTradeNo = `BP${Date.now()}`;
@@ -269,6 +347,25 @@ router.post("/checkout", upload.none(), async (req: Request, res: Response) => {
       },
     });
 
+    const pointSpent = await prisma.pointsLog.create({
+      data: {
+        type: 6,
+        userId: id,
+        amount: parseInt(req.body.pointused),
+      },
+    });
+
+    const pointminus = await prisma.user.update({
+      where: {
+        id: id,
+      },
+      data: {
+        point: {
+          decrement: parseInt(req.body.pointused), // 使用 decrement 進行原子操作
+        },
+      },
+    });
+
     const baseParams = {
       // 必填參數
       MerchantTradeNo: MerchantTradeNo, // 訂單編號 (唯一值)
@@ -304,6 +401,7 @@ router.post("/checkout", upload.none(), async (req: Request, res: Response) => {
   }
 });
 
+//綠屆returnURL
 router.post("/order", (req: Request, res: Response) => {
   console.log(req.body);
   res.send("1|OK");
@@ -354,5 +452,22 @@ router.get("/order", async (req: Request, res: Response) => {
   };
   res.status(200).json(response);
 });
+
+//積分查詢
+router.get(
+  "/point",
+  jwtParseMiddleware,
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const user_id = req.user?.user_id;
+    try {
+      const result = await prisma.user.findUnique({ where: { id: user_id } });
+      const response = { success: true, data: result };
+      res.json(response);
+    } catch (error) {
+      res.status(400).send("error");
+    }
+  }
+);
 
 export default router;
