@@ -165,6 +165,8 @@ const io = new Server(server, {
     credentials: true,
   },
 });
+// 💡 關鍵：把 io 寫入 app，讓所有路由都能 req.app.get("io")
+app.set("io", io);
 
 chatSocket(io);
 

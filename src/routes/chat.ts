@@ -232,24 +232,49 @@ router.post(
     if (!filename) {
       return res.status(400).json({ message: "未上傳檔案" });
     }
-    //1.創建新的對話紀錄 且類型設定為image 並將檔案名稱存在content欄位
-    const result = await prisma.message.create({
-      data: {
-        senderId: userId,
-        content: filename,
-        messageType: "image",
-        roomId: +roomId || null, // 沒有就存 null
-        receiverId: +receiverId || null, // 團體視窗就沒有接收者
-      },
-    });
-    if (result) {
+    try {
+      //1.創建新的對話紀錄 且類型設定為image 並將檔案名稱存在content欄位
+      const result = await prisma.message.create({
+        data: {
+          senderId: userId,
+          content: filename,
+          messageType: "image",
+          roomId: +roomId || null, // 沒有就存 null
+          receiverId: +receiverId || null, // 團體視窗就沒有接收者
+        },
+      });
+      if (!result) {
+        return res.json({ message: "上傳失敗" });
+      }
       console.log("圖片訊息已存入資料庫:", result);
-      // 上傳成功後，檔案資訊在 req.file
-      return res.json({ filename: req.file?.filename });
-    }
 
-    // 上傳失敗
-    return res.json({ message: "上傳失敗" });
+      // 2️⃣ 廣播訊息（重點）
+      const io = req.app.get("io"); // ✅ 在 server.ts 中有設定 app.set('io', io)
+
+      if (roomId) {
+        // 群組聊天室
+        io.to(`chat_${roomId}`).emit("newMessage", result);
+        console.log(`📡 廣播圖片訊息到房間 chat_${roomId}`);
+      } else if (receiverId) {
+        // 個人聊天室：傳給雙方
+        io.to(String(receiverId)).emit("newMessage", result);
+        io.to(String(userId)).emit("newMessage", result);
+        console.log(`📡 廣播圖片訊息給 ${userId} 與 ${receiverId}`);
+      }
+      // 3️⃣ 回傳結果給前端
+      return res.json({ success: true, filename: req.file?.filename });
+
+      // if (result) {
+      //   console.log("圖片訊息已存入資料庫:", result);
+      //   // 上傳成功後，檔案資訊在 req.file
+      //   return res.json({ filename: req.file?.filename });
+      // }
+      // // 上傳失敗
+      // return res.json({ message: "上傳失敗" });
+    } catch (err) {
+      console.error("上傳圖片時發生錯誤:", err);
+      return res.status(500).json({ message: "伺服器錯誤，請稍後再試" });
+    }
   }
 );
 
