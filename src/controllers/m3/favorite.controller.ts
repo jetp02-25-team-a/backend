@@ -10,11 +10,11 @@ export const getFavoritesAcc = asyncWrapper(
       throw new ApiError("用戶驗證失敗，請重新登入", 401);
     }
 
-    const favoriteAccIds = await favoriteService.getFavorites(userId);
+    const favoriteAccList = await favoriteService.getFavorites(userId);
 
     sendSuccess(res, {
-      favoriteAccIds: favoriteAccIds,
-      count: favoriteAccIds.length,
+      favoriteAccList: favoriteAccList,
+      count: favoriteAccList.length,
     });
   }
 );

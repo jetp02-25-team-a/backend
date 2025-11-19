@@ -2,15 +2,28 @@ import { prisma } from "../../utils/prisma-pagination";
 
 import { NotFoundError } from "../../lib";
 
-async function getFavorites(userId: number): Promise<number[]> {
+async function getFavorites(
+  userId: number
+): Promise<{ accommodationId: number; name: string }[]> {
   const favorites = await prisma.favoriteAccommodation.findMany({
     where: { userId: userId },
     select: {
       accommodationId: true,
+      Accommodation: {
+        select: {
+          name: true,
+        },
+      },
+    },
+    orderBy: {
+      addedAt: "desc", // desc = descending (降序)，最新的在最前面
     },
   });
 
-  return favorites.map((fav) => fav.accommodationId);
+  return favorites.map((fav) => ({
+    accommodationId: fav.accommodationId,
+    name: fav.Accommodation.name, // 從內層物件取出 name
+  }));
 }
 
 // 如果要做 toggle
