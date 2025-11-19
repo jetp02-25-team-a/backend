@@ -9,6 +9,7 @@ import {
   getBookingByIdService,
   updateBookingService,
   cancelBookingService,
+  getAllUserBookingsService,
 } from "../../services/m3";
 
 // 查住宿一週房型庫存
@@ -50,6 +51,22 @@ export const getRoomTypeWeeklyInventories = asyncWrapper(
     sendSuccess(res, inventories);
   }
 );
+
+export const getAllUserBookings = async (req: any, res: any, next: any) => {
+  try {
+    const userId = req.user.id; // 從身份驗證的中間件中獲取使用者 ID
+
+    // 調用服務層獲取訂單列表
+    const bookings = await getAllUserBookingsService(userId);
+
+    res.status(200).json({
+      success: true,
+      data: bookings, // 返回訂單列表陣列
+    });
+  } catch (error) {
+    next(error); // 傳遞錯誤給 Express 錯誤處理器
+  }
+};
 
 // 建立訂單
 export const createBooking = asyncWrapper(
