@@ -54,7 +54,7 @@ export const getRoomTypeWeeklyInventories = asyncWrapper(
 
 export const getAllUserBookings = async (req: any, res: any, next: any) => {
   try {
-    const userId = req.user.id; // 從身份驗證的中間件中獲取使用者 ID
+    const userId = req.user.user_id; // 從身份驗證的中間件中獲取使用者 ID
 
     // 調用服務層獲取訂單列表
     const bookings = await getAllUserBookingsService(userId);
