@@ -391,6 +391,13 @@ export const chatSocket = (io: Server) => {
       // 你也可以根據需要移除其他事件
     });
 
+    //處理即時收到加入好友的通知
+    socket.on("addFriend", (data) => {
+      console.log("收到加入好友通知:", data);
+      const { receiveId } = data;
+      socket.to(String(receiveId)).emit("newFriend", data);
+    });
+
     // 使用者離線
     socket.on("disconnect", () => {
       console.log("使用者離線:", socket.id);
