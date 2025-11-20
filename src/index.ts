@@ -72,6 +72,12 @@ app.use(cors(corsOptions));
 // 設定靜態內容資料夾
 app.use(express.static("public"));
 
+// 解析 JSON body 的中間件（必須在路由之前）
+app.use(express.json());
+
+// 解析 URL-encoded body 的中間件（必須在路由之前）
+app.use(express.urlencoded({ extended: true }));
+
 // JWT 解析 middleware (可選性驗證) (m3用)
 app.use(m3JwtParseMiddleware);
 

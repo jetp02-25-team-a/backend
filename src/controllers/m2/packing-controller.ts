@@ -47,6 +47,18 @@ export const createPackingItem = async (
   try {
     const data = packingCreateSchema.parse(req.body);
 
+    // 如果沒有提供 userId，嘗試從 JWT 取得
+    if (!data.userId && req.user?.user_id) {
+      data.userId = req.user.user_id;
+    }
+
+    // 確保 isChecked 是 boolean
+    if (data.isChecked === undefined) {
+      data.isChecked = false;
+    } else {
+      data.isChecked = Boolean(data.isChecked);
+    }
+
     const item = await createPackingItemService(data);
 
     res.status(201).json(item);
@@ -67,6 +79,11 @@ export const updatePackingItem = async (
   try {
     const { id } = packingIdSchema.parse(req.params);
     const data = packingUpdateSchema.parse(req.body);
+
+    // 確保 isChecked 是 boolean（如果提供）
+    if (data.isChecked !== undefined) {
+      data.isChecked = Boolean(data.isChecked);
+    }
 
     const item = await updatePackingItemService(id, data);
 
