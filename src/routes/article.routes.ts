@@ -459,7 +459,7 @@
 // export default router;
 
 import express from "express";
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response } from "express";
 import { jwtParseMiddleware, requireAuth } from "../middleware";
 import upload from "../utils/upload-images-post";
 import { prisma } from "../utils/prisma-pagination.js";
@@ -468,30 +468,26 @@ const router = express.Router();
 const photoUpload = upload.array("photo");
 
 /* ==========================================================
- * Helper: safeParseInt
+ * Helper
  * ========================================================== */
-const safeParseInt = (
-  value: string | number | undefined | null
-): number | undefined => {
-  if (typeof value === "string") {
-    const parsed = parseInt(value, 10);
-    return isNaN(parsed) ? undefined : parsed;
-  }
-  if (typeof value === "number" && !isNaN(value)) {
-    return value;
-  }
-  return undefined;
+const parseId = (v: any): number | undefined => {
+  const parsed = parseInt(v, 10);
+  return isNaN(parsed) ? undefined : parsed;
 };
 
+const sendError = (
+  res: Response,
+  code: number,
+  message: string,
+  extra: any = {}
+) => res.status(code).json({ success: false, message, ...extra });
+
 /* ==========================================================
- * GET /ranking － Ranking Artikel
+ * GET /ranking
  * ========================================================== */
-router.get("/ranking", async (req: Request, res: Response) => {
+router.get("/ranking", async (req, res) => {
   try {
-    const limit = Math.max(
-      1,
-      Math.min(100, parseInt(req.query.limit as string) || 20)
-    );
+    const limit = Math.max(1, Math.min(100, parseInt(req.query.limit as string) || 20));
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
 
     const WEIGHT_LIKE = 3;
@@ -505,9 +501,7 @@ router.get("/ranking", async (req: Request, res: Response) => {
       include: {
         Location: { select: { city: true } },
         Photos: true,
-        _count: {
-          select: { Likes: true, MessageBoard: true, Photos: true },
-        },
+        _count: { select: { Likes: true, MessageBoard: true, Photos: true } },
       },
     });
 
@@ -519,7 +513,7 @@ router.get("/ranking", async (req: Request, res: Response) => {
       const photos = p._count.Photos || 0;
 
       const hoursSinceCreated =
-        (now.getTime() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60);
+        (now.getTime() - new Date(p.createdAt).getTime()) / 3600000;
 
       const freshness = Math.max(0, 1 - hoursSinceCreated / DECAY_HOURS);
 
@@ -550,7 +544,7 @@ router.get("/ranking", async (req: Request, res: Response) => {
       rank: start + idx + 1,
     }));
 
-    return res.json({
+    res.json({
       success: true,
       message: "Post ranking successfully calculated",
       page,
@@ -560,219 +554,150 @@ router.get("/ranking", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("❌ Error ranking posts:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to calculate article ranking",
-    });
+    sendError(res, 500, "Failed to calculate article ranking");
   }
 });
 
 /* ==========================================================
- * POST / - Buat artikel baru
+ * POST /
  * ========================================================== */
-router.post(
-  "/",
-  jwtParseMiddleware,
-  requireAuth,
-  photoUpload,
-  async (req: Request, res: Response) => {
-    try {
-      const { title, content, locationId } = req.body;
-      const userId = safeParseInt(req.user?.user_id);
-
-      if (!userId)
-        return res
-          .status(401)
-          .json({ success: false, message: "Unauthorized" });
-      if (!title || !content || !locationId)
-        return res.status(400).json({
-          success: false,
-          message: "title, content, locationId wajib diisi",
-        });
-
-      const photos =
-        (req.files as Express.Multer.File[] | undefined)?.map((f) => ({
-          url: `${f.filename}`,
-        })) || [];
-
-      const locationIntId = safeParseInt(locationId);
-      if (!locationIntId)
-        return res
-          .status(400)
-          .json({ success: false, message: "Invalid location ID" });
-
-      const newPost = await prisma.post.create({
-        data: {
-          title,
-          content,
-          User: { connect: { id: userId } },
-          Location: { connect: { id: locationIntId } },
-          Photos: { createMany: { data: photos } },
-        },
-        include: { Location: true, Photos: true },
-      });
-
-      res.status(201).json({
-        success: true,
-        message: "文章創建成功",
-        post: {
-          id: newPost.id.toString(),
-          title: newPost.title,
-          content: newPost.content,
-          location: newPost.Location?.city || "未知地點",
-          imgUrl: newPost.Photos?.[0]?.url || "",
-        },
-      });
-    } catch (error) {
-      console.error("❌ Error creating post:", error);
-      res.status(500).json({ success: false, message: "Failed to save post" });
-    }
-  }
-);
-
-/* ==========================================================
- * PUT /:id - Update artikel
- * ========================================================== */
-router.put(
-  "/:id",
-  jwtParseMiddleware,
-  requireAuth,
-  photoUpload,
-  async (req: Request, res: Response) => {
-    const { id } = req.params;
+router.post("/", jwtParseMiddleware, requireAuth, photoUpload, async (req, res) => {
+  try {
     const { title, content, locationId } = req.body;
+    const userId = parseId(req.user?.user_id);
+    const locId = parseId(locationId);
 
-    const authenticatedUserId = safeParseInt(req.user?.user_id);
-    const postId = safeParseInt(id);
-    const locationIntId = safeParseInt(locationId);
+    if (!userId) return sendError(res, 401, "Unauthorized");
+    if (!title || !content || !locId)
+      return sendError(res, 400, "title, content, locationId wajib diisi");
 
-    if (!postId)
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid article ID" });
-    if (!title || !content || !locationId)
-      return res.status(400).json({
-        success: false,
-        message: "title, content, locationId wajib diisi",
-      });
-    if (!authenticatedUserId)
-      return res.status(401).json({ success: false, message: "Unauthorized" });
+    const photos =
+      (req.files as Express.Multer.File[] | undefined)?.map((f) => ({
+        url: f.filename,
+      })) || [];
 
-    try {
-      const existingPost = await prisma.post.findUnique({
-        where: { id: postId },
-        select: { userId: true },
-      });
+    const newPost = await prisma.post.create({
+      data: {
+        title,
+        content,
+        User: { connect: { id: userId } },
+        Location: { connect: { id: locId } },
+        Photos: { createMany: { data: photos } },
+      },
+      include: { Location: true, Photos: true },
+    });
 
-      if (!existingPost)
-        return res
-          .status(404)
-          .json({ success: false, message: "Artikel tidak ditemukan" });
-
-      if (existingPost.userId !== authenticatedUserId)
-        return res.status(403).json({
-          success: false,
-          message: "Forbidden: bukan pemilik artikel",
-        });
-
-      const newPhotos =
-        (req.files as Express.Multer.File[] | undefined)?.map((f) => ({
-          url: `${f.filename}`,
-          postId,
-        })) || [];
-
-      const updatedPost = await prisma.post.update({
-        where: { id: postId },
-        data: {
-          title,
-          content,
-          Location: locationIntId
-            ? { connect: { id: locationIntId } }
-            : undefined,
-          Photos:
-            newPhotos.length > 0
-              ? { createMany: { data: newPhotos } }
-              : undefined,
-        },
-        include: { User: true, Location: true, Photos: true },
-      });
-
-      return res.status(200).json({
-        success: true,
-        message: "文章編輯完成",
-        post: {
-          id: updatedPost.id.toString(),
-          title: updatedPost.title,
-          content: updatedPost.content,
-          location: updatedPost.Location?.city || "未知地點",
-          photos: updatedPost.Photos.map((p) => p.url),
-        },
-      });
-    } catch (error) {
-      console.error("❌ Error updating article:", error);
-      return res.status(500).json({ success: false, message: "編輯文章失敗" });
-    }
+    res.status(201).json({
+      success: true,
+      message: "文章創建成功",
+      post: {
+        id: newPost.id.toString(),
+        title: newPost.title,
+        content: newPost.content,
+        location: newPost.Location?.city || "未知地點",
+        imgUrl: newPost.Photos?.[0]?.url || "",
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error creating post:", error);
+    sendError(res, 500, "Failed to save post");
   }
-);
+});
 
 /* ==========================================================
- * DELETE /:id - Hapus artikel
+ * PUT /:id
  * ========================================================== */
-router.delete(
-  "/:id",
-  jwtParseMiddleware,
-  requireAuth,
-  async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const authenticatedUserId = safeParseInt(req.user?.user_id);
-    const postId = safeParseInt(id);
+router.put("/:id", jwtParseMiddleware, requireAuth, photoUpload, async (req, res) => {
+  const postId = parseId(req.params.id);
+  const userId = parseId(req.user?.user_id);
+  const { title, content, locationId } = req.body;
 
-    if (!postId)
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid article ID" });
-    if (!authenticatedUserId)
-      return res.status(401).json({ success: false, message: "Unauthorized" });
+  if (!postId) return sendError(res, 400, "Invalid article ID");
+  if (!title || !content || !locationId)
+    return sendError(res, 400, "title, content, locationId wajib diisi");
+  if (!userId) return sendError(res, 401, "Unauthorized");
 
-    try {
-      const existingPost = await prisma.post.findUnique({
-        where: { id: postId },
-        select: { userId: true },
-      });
+  try {
+    const existingPost = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { userId: true },
+    });
 
-      if (!existingPost)
-        return res
-          .status(404)
-          .json({ success: false, message: "Artikel tidak ditemukan" });
+    if (!existingPost) return sendError(res, 404, "Artikel tidak ditemukan");
+    if (existingPost.userId !== userId)
+      return sendError(res, 403, "Forbidden: bukan pemilik artikel");
 
-      if (existingPost.userId !== authenticatedUserId)
-        return res.status(403).json({
-          success: false,
-          message: "Forbidden: bukan pemilik artikel",
-        });
+    const newPhotos =
+      (req.files as Express.Multer.File[] | undefined)?.map((f) => ({
+        url: f.filename,
+        postId,
+      })) || [];
 
-      await prisma.post.delete({ where: { id: postId } });
+    const updatedPost = await prisma.post.update({
+      where: { id: postId },
+      data: {
+        title,
+        content,
+        Location: locationId ? { connect: { id: parseId(locationId) } } : undefined,
+        Photos:
+          newPhotos.length > 0 ? { createMany: { data: newPhotos } } : undefined,
+      },
+      include: { User: true, Location: true, Photos: true },
+    });
 
-      return res.status(200).json({
-        success: true,
-        message: "文章刪除完成",
-      });
-    } catch (error) {
-      console.error("❌ Error deleting article:", error);
-      return res.status(500).json({ success: false, message: "刪除文章失敗" });
-    }
+    res.json({
+      success: true,
+      message: "文章編輯完成",
+      post: {
+        id: updatedPost.id.toString(),
+        title: updatedPost.title,
+        content: updatedPost.content,
+        location: updatedPost.Location?.city || "未知地點",
+        photos: updatedPost.Photos.map((p) => p.url),
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error updating article:", error);
+    sendError(res, 500, "編輯文章失敗");
   }
-);
+});
 
 /* ==========================================================
- * 🟩 MESSAGE BOARD ROUTES — (harus diletakkan sebelum GET /:id)
+ * DELETE /:id
+ * ========================================================== */
+router.delete("/:id", jwtParseMiddleware, requireAuth, async (req, res) => {
+  const postId = parseId(req.params.id);
+  const userId = parseId(req.user?.user_id);
+
+  if (!postId) return sendError(res, 400, "Invalid article ID");
+  if (!userId) return sendError(res, 401, "Unauthorized");
+
+  try {
+    const existingPost = await prisma.post.findUnique({
+      where: { id: postId },
+      select: { userId: true },
+    });
+
+    if (!existingPost) return sendError(res, 404, "Artikel tidak ditemukan");
+    if (existingPost.userId !== userId)
+      return sendError(res, 403, "Forbidden: bukan pemilik artikel");
+
+    await prisma.post.delete({ where: { id: postId } });
+
+    res.json({ success: true, message: "文章刪除完成" });
+  } catch (error) {
+    console.error("❌ Error deleting article:", error);
+    sendError(res, 500, "刪除文章失敗");
+  }
+});
+
+/* ==========================================================
+ * 🟩 MESSAGE BOARD ROUTES
  * ========================================================== */
 
-/* GET semua komentar */
-router.get("/:postId/comments", async (req: Request, res: Response) => {
-  const postId = safeParseInt(req.params.postId);
-  if (!postId)
-    return res.status(400).json({ success: false, message: "Invalid post ID" });
+router.get("/:postId/comments", async (req, res) => {
+  const postId = parseId(req.params.postId);
+  if (!postId) return sendError(res, 400, "Invalid post ID");
 
   try {
     const comments = await prisma.messageBoard.findMany({
@@ -781,7 +706,7 @@ router.get("/:postId/comments", async (req: Request, res: Response) => {
       include: { User: { select: { id: true, fullName: true } } },
     });
 
-    return res.json({
+    res.json({
       success: true,
       comments: comments.map((c) => ({
         id: c.id,
@@ -793,141 +718,97 @@ router.get("/:postId/comments", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("❌ Error fetching comments:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to retrieve comments" });
+    sendError(res, 500, "Failed to retrieve comments");
   }
 });
 
-/* POST komentar */
-router.post(
-  "/:postId/comments",
-  jwtParseMiddleware,
-  requireAuth,
-  async (req: Request, res: Response) => {
-    const postId = safeParseInt(req.params.postId);
-    const userId = safeParseInt(req.user?.user_id);
-    const { content } = req.body;
+router.post("/:postId/comments", jwtParseMiddleware, requireAuth, async (req, res) => {
+  const postId = parseId(req.params.postId);
+  const userId = parseId(req.user?.user_id);
+  const { content } = req.body;
 
-    if (!postId)
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid post ID" });
-    if (!userId)
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    if (!content || content.trim() === "")
-      return res
-        .status(400)
-        .json({ success: false, message: "Komentar tidak boleh kosong" });
+  if (!postId) return sendError(res, 400, "Invalid post ID");
+  if (!userId) return sendError(res, 401, "Unauthorized");
+  if (!content || content.trim() === "")
+    return sendError(res, 400, "Komentar tidak boleh kosong");
 
-    try {
-      const postExists = await prisma.post.findUnique({
-        where: { id: postId },
-      });
-      if (!postExists)
-        return res
-          .status(404)
-          .json({ success: false, message: "Post tidak ditemukan" });
+  try {
+    const postExists = await prisma.post.findUnique({ where: { id: postId } });
+    if (!postExists) return sendError(res, 404, "Post tidak ditemukan");
 
-      const newComment = await prisma.messageBoard.create({
-        data: {
-          postId,
-          userId,
-          username: req.user?.nickname || "User",
-          content,
-        },
-      });
+    const newComment = await prisma.messageBoard.create({
+      data: {
+        postId,
+        userId,
+        username: req.user?.nickname || "User",
+        content,
+      },
+    });
 
-      return res.status(201).json({
-        success: true,
-        comment: {
-          id: newComment.id,
-          userId,
-          username: newComment.username,
-          content: newComment.content,
-          createdAt: newComment.createdAt,
-        },
-      });
-    } catch (error) {
-      console.error("❌ Error creating comment:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Gagal membuat komentar" });
-    }
+    res.status(201).json({
+      success: true,
+      comment: {
+        id: newComment.id,
+        userId,
+        username: newComment.username,
+        content: newComment.content,
+        createdAt: newComment.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error creating comment:", error);
+    sendError(res, 500, "Gagal membuat komentar");
   }
-);
+});
 
-/* PUT komentar */
-router.put(
-  "/:postId/comments/:commentId",
-  jwtParseMiddleware,
-  requireAuth,
-  async (req: Request, res: Response) => {
-    const postId = safeParseInt(req.params.postId);
-    const commentId = safeParseInt(req.params.commentId);
-    const userId = safeParseInt(req.user?.user_id);
-    const { content } = req.body;
+router.put("/:postId/comments/:commentId", jwtParseMiddleware, requireAuth, async (req, res) => {
+  const postId = parseId(req.params.postId);
+  const commentId = parseId(req.params.commentId);
+  const userId = parseId(req.user?.user_id);
+  const { content } = req.body;
 
-    if (!postId || !commentId)
-      return res.status(400).json({ success: false, message: "Invalid ID" });
-    if (!userId)
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    if (!content || content.trim() === "")
-      return res
-        .status(400)
-        .json({ success: false, message: "Komentar tidak boleh kosong" });
+  if (!postId || !commentId) return sendError(res, 400, "Invalid ID");
+  if (!userId) return sendError(res, 401, "Unauthorized");
+  if (!content || content.trim() === "")
+    return sendError(res, 400, "Komentar tidak boleh kosong");
 
-    try {
-      const existing = await prisma.messageBoard.findUnique({
-        where: { id: commentId },
-      });
+  try {
+    const existing = await prisma.messageBoard.findUnique({ where: { id: commentId } });
 
-      if (!existing)
-        return res
-          .status(404)
-          .json({ success: false, message: "Komentar tidak ditemukan" });
-      if (existing.userId !== userId)
-        return res.status(403).json({
-          success: false,
-          message: "Forbidden: bukan pemilik komentar",
-        });
+    if (!existing) return sendError(res, 404, "Komentar tidak ditemukan");
+    if (existing.userId !== userId)
+      return sendError(res, 403, "Forbidden: bukan pemilik komentar");
 
-      const updated = await prisma.messageBoard.update({
-        where: { id: commentId },
-        data: { content },
-      });
+    const updated = await prisma.messageBoard.update({
+      where: { id: commentId },
+      data: { content },
+    });
 
-      return res.json({
-        success: true,
-        comment: {
-          id: updated.id,
-          content: updated.content,
-          createdAt: updated.createdAt,
-        },
-      });
-    } catch (error) {
-      console.error("❌ Error updating comment:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Gagal mengedit komentar" });
-    }
+    res.json({
+      success: true,
+      comment: {
+        id: updated.id,
+        content: updated.content,
+        createdAt: updated.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error updating comment:", error);
+    sendError(res, 500, "Gagal mengedit komentar");
   }
-);
+});
 
-/* DELETE komentar */
 router.delete(
   "/:postId/comments/:commentId",
   jwtParseMiddleware,
   requireAuth,
-  async (req: Request, res: Response) => {
-    const postId = safeParseInt(req.params.postId);
-    const commentId = safeParseInt(req.params.commentId);
-    const userId = safeParseInt(req.user?.user_id);
+  async (req, res) => {
+    const postId = parseId(req.params.postId);
+    const commentId = parseId(req.params.commentId);
+    const userId = parseId(req.user?.user_id);
 
-    if (!postId || !commentId)
-      return res.status(400).json({ success: false, message: "Invalid ID" });
-    if (!userId)
-      return res.status(401).json({ success: false, message: "Unauthorized" });
+    if (!postId || !commentId) return sendError(res, 400, "Invalid ID");
+    if (!userId) return sendError(res, 401, "Unauthorized");
 
     try {
       const existing = await prisma.messageBoard.findUnique({
@@ -935,41 +816,30 @@ router.delete(
         select: { userId: true, postId: true },
       });
 
-      if (!existing)
-        return res
-          .status(404)
-          .json({ success: false, message: "Komentar tidak ditemukan" });
+      if (!existing) return sendError(res, 404, "Komentar tidak ditemukan");
       if (existing.postId !== postId)
-        return res.status(400).json({
-          success: false,
-          message: "Post ID tidak cocok dengan komentar",
-        });
+        return sendError(res, 400, "Post ID tidak cocok dengan komentar");
       if (existing.userId !== userId)
-        return res.status(403).json({
-          success: false,
-          message: "Forbidden: bukan pemilik komentar",
-        });
+        return sendError(res, 403, "Forbidden: bukan pemilik komentar");
 
       await prisma.messageBoard.delete({ where: { id: commentId } });
 
-      return res.json({ success: true, message: "Komentar berhasil dihapus" });
+      res.json({ success: true, message: "Komentar berhasil dihapus" });
     } catch (error) {
       console.error("❌ Error deleting comment:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Gagal menghapus komentar" });
+      sendError(res, 500, "Gagal menghapus komentar");
     }
   }
 );
 
 /* ==========================================================
- * GET /:id - Detail Artikel
+ * GET /:id (DETAIL)
  * ========================================================== */
-router.get("/:id", jwtParseMiddleware, async (req: Request, res: Response) => {
-  const postId = safeParseInt(req.params.id);
-  const authenticatedUserId = safeParseInt(req.user?.user_id);
+router.get("/:id", jwtParseMiddleware, async (req, res) => {
+  const postId = parseId(req.params.id);
+  const userId = parseId(req.user?.user_id);
 
-  if (!postId) return res.status(400).json({ message: "Invalid post ID" });
+  if (!postId) return sendError(res, 400, "Invalid post ID");
 
   try {
     const post = await prisma.post.findUnique({
@@ -982,119 +852,93 @@ router.get("/:id", jwtParseMiddleware, async (req: Request, res: Response) => {
       },
     });
 
-    if (!post) return res.status(404).json({ message: "Post not found" });
+    if (!post) return sendError(res, 404, "Post not found");
 
-    const isLikedByMe = authenticatedUserId
-      ? post.Likes.some((l) => l.userId === authenticatedUserId)
-      : false;
+    const isLikedByMe = userId ? post.Likes.some((l) => l.userId === userId) : false;
 
-    const formatted = {
+    res.json({
       id: post.id.toString(),
       userId: post.userId.toString(),
       title: post.title,
       content: post.content,
       location: post.Location?.city || "未知地點",
-      photos: post.Photos?.map((p) => p.url) || [],
-      likes: post.Likes.length || 0,
+      photos: post.Photos.map((p) => p.url),
+      likes: post.Likes.length,
       isLikedByMe,
-    };
-
-    res.json(formatted);
+    });
   } catch (error) {
     console.error("❌ Error retrieving post:", error);
-    res.status(500).json({ message: "Error retrieving post" });
+    sendError(res, 500, "Error retrieving post");
   }
 });
 
 /* ==========================================================
- * POST /:id/like - Toggle Like
+ * POST /:id/like
  * ========================================================== */
-router.post(
-  "/:id/like",
-  jwtParseMiddleware,
-  requireAuth,
-  async (req: Request, res: Response) => {
-    const postId = safeParseInt(req.params.id);
-    const userId = safeParseInt(req.user?.user_id);
+router.post("/:id/like", jwtParseMiddleware, requireAuth, async (req, res) => {
+  const postId = parseId(req.params.id);
+  const userId = parseId(req.user?.user_id);
 
-    if (!userId)
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    if (!postId)
-      return res
-        .status(400)
-        .json({ success: false, message: "Invalid article ID" });
+  if (!userId) return sendError(res, 401, "Unauthorized");
+  if (!postId) return sendError(res, 400, "Invalid article ID");
 
-    try {
-      const existingLike = await prisma.like.findFirst({
-        where: { postId, userId },
-      });
+  try {
+    const existingLike = await prisma.like.findFirst({ where: { postId, userId } });
 
-      let likedStatus;
+    let likedStatus;
 
-      if (existingLike) {
-        await prisma.like.delete({ where: { id: existingLike.id } });
-        likedStatus = false;
-      } else {
-        const postExists = await prisma.post.findUnique({
-          where: { id: postId },
-          select: { id: true },
-        });
-        if (!postExists)
-          return res
-            .status(404)
-            .json({ success: false, message: "Post not found" });
+    if (existingLike) {
+      await prisma.like.delete({ where: { id: existingLike.id } });
+      likedStatus = false;
+    } else {
+      const postExists = await prisma.post.findUnique({ where: { id: postId } });
+      if (!postExists) return sendError(res, 404, "Post not found");
 
-        await prisma.like.create({
-          data: { postId, userId },
-        });
-        likedStatus = true;
-      }
-
-      const newLikesCount = await prisma.like.count({ where: { postId } });
-
-      return res.json({
-        success: true,
-        liked: likedStatus,
-        newLikesCount,
-        isLikedByMe: likedStatus,
-      });
-    } catch (error) {
-      console.error("❌ Error liking article:", error);
-      res
-        .status(500)
-        .json({ success: false, message: "Failed to like article" });
+      await prisma.like.create({ data: { postId, userId } });
+      likedStatus = true;
     }
+
+    const newLikesCount = await prisma.like.count({ where: { postId } });
+
+    res.json({
+      success: true,
+      liked: likedStatus,
+      newLikesCount,
+      isLikedByMe: likedStatus,
+    });
+  } catch (error) {
+    console.error("❌ Error liking article:", error);
+    sendError(res, 500, "Failed to like article");
   }
-);
+});
 
 /* ==========================================================
- * GET / - Ambil semua artikel
+ * GET /
  * ========================================================== */
-router.get("/", async (_req: Request, res: Response) => {
+router.get("/", async (_req, res) => {
   try {
     const posts = await prisma.post.findMany({
       include: { Location: true, Photos: true, Likes: true },
       orderBy: { id: "desc" },
     });
 
-    const cards = posts.map((p) => ({
-      id: p.id.toString(),
-      title: p.title,
-      location: p.Location?.city || "未知地點",
-      imgUrl: p.Photos?.[0]?.url || "",
-      likesCount: p.Likes.length || 0,
-    }));
-
-    res.json(cards);
+    res.json(
+      posts.map((p) => ({
+        id: p.id.toString(),
+        title: p.title,
+        location: p.Location?.city || "未知地點",
+        imgUrl: p.Photos?.[0]?.url || "",
+        likesCount: p.Likes.length,
+      }))
+    );
   } catch (error) {
     console.error("❌ Error fetching posts:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to retrieve posts" });
+    sendError(res, 500, "Failed to retrieve posts");
   }
 });
 
 export default router;
+
 
 // app.post('/api/article/:id/like', async (req, res) => {
 // const { id } = req.params;
