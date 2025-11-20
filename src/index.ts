@@ -36,6 +36,8 @@ import { jwtParseMiddleware } from "./middleware";
 import { m3JwtParseMiddleware } from "./middleware";
 import { globalErrorHandler } from "./middleware";
 
+import m2Router from "./routes/m2";
+
 // 建立伺服器主物件
 const app = express();
 
@@ -75,6 +77,7 @@ app.use(m3JwtParseMiddleware);
 
 app.use("/api/place", jwtParseMiddleware);
 app.use("/api/favorite", jwtParseMiddleware);
+app.use("/api/m2", m2Router);
 
 // 解析 JSON body 的中間件
 app.use(express.json());
