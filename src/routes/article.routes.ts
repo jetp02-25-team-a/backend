@@ -832,6 +832,36 @@ router.delete(
   }
 );
 
+// GET /articles/user/:userId
+
+router.get('/user',requireAuth, async (req: Request, res: Response) => {
+  const userId = (req.user?.user_id);
+  if ((!userId)) return res.status(400).json({ success: false, message: 'Invalid user ID' });
+
+  try {
+    const posts = await prisma.post.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: { Location: true, Photos: true },
+    });
+
+    res.json({
+      success: true,
+      data: posts.map(p => ({
+        id: p.id.toString(),
+        title: p.title,
+        content: p.content,
+        location: p.Location?.city || '未知地點',
+        imgUrl: p.Photos?.[0]?.url || null,
+        createdAt: p.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Failed to load user posts' });
+  }
+});
+
 /* ==========================================================
  * GET /:id (DETAIL)
  * ========================================================== */
