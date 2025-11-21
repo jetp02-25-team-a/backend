@@ -36,6 +36,8 @@ import { jwtParseMiddleware } from "./middleware";
 import { m3JwtParseMiddleware } from "./middleware";
 import { globalErrorHandler } from "./middleware";
 
+import m2Router from "./routes/m2";
+
 // 建立伺服器主物件
 const app = express();
 
@@ -70,11 +72,18 @@ app.use(cors(corsOptions));
 // 設定靜態內容資料夾
 app.use(express.static("public"));
 
+// 解析 JSON body 的中間件（必須在路由之前）
+app.use(express.json());
+
+// 解析 URL-encoded body 的中間件（必須在路由之前）
+app.use(express.urlencoded({ extended: true }));
+
 // JWT 解析 middleware (可選性驗證) (m3用)
 app.use(m3JwtParseMiddleware);
 
 app.use("/api/place", jwtParseMiddleware);
 app.use("/api/favorite", jwtParseMiddleware);
+app.use("/api/m2", m2Router);
 
 // 解析 JSON body 的中間件
 app.use(express.json());
