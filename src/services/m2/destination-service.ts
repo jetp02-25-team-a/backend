@@ -2,9 +2,9 @@
 import prisma from "../../utils/prisma-pagination-place";
 
 export const getAllDestinationsService = async () => {
-  const cities = await prisma.city.findMany({
+  const cities = await prisma.place.findMany({
     orderBy: {
-      name: "asc",
+      id: "asc",
     },
   });
 

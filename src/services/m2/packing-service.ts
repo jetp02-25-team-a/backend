@@ -17,6 +17,14 @@ export const getPackingItemsService = async (tripId: number) => {
 export const createPackingItemService = async (data: PackingCreateDTO) => {
   return prisma.packingItem.create({
     data,
+    select: {
+      id: true,
+      TripPlanId: true,
+      templateId: true,
+      userId: true,
+      name: true,
+      isChecked: true,
+    },
   });
 };
 

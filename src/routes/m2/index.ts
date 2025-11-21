@@ -8,6 +8,7 @@ import tripDetailRoutes from "./tripDetail-routes";
 import expenseRoutes from "./expense-routes";
 import packingRoutes from "./packing-routes";
 import destinationRoutes from "./destination-routes";
+import tripPlaceRoutes from "./tripPlace-routes";
 
 const router = express.Router();
 
@@ -28,5 +29,7 @@ router.use("/packing", packingRoutes);
 
 // 🗺 目的地
 router.use("/destinations", destinationRoutes);
+
+router.use("/", tripPlaceRoutes);
 
 export default router;
